@@ -1,151 +1,281 @@
-import requests
-from xml.etree import ElementTree as ET
+import datetime
 from dataclasses import dataclass
-from typing import List, Optional, Any
+from typing import Dict, List, Optional, Set
+import requests
+import xml.etree.ElementTree as ET
 from datetime import datetime
-import yaml
+import pytz
 import os
+import yaml
+import json
+
+# Constants
+NAMESPACE_CAP = "urn:oasis:names:tc:emergency:cap:1.2"
+NAMESPACE_ATOM = "http://www.w3.org/2005/Atom"
 
 @dataclass
 class Alert:
-    id: str
-    title: str
-    updated: datetime
-    published: datetime
-    identifier: str
-    sender: Optional[str] = None
-    sent: Optional[datetime] = None
-    status: Optional[str] = None
-    msgType: Optional[str] = None
-    scope: Optional[str] = None
-    language: Optional[str] = None
-    category: Optional[str] = None
-    event: Optional[str] = None
-    responseType: Optional[str] = None
-    urgency: Optional[str] = None
-    severity: Optional[str] = None
-    certainty: Optional[str] = None
-    effective: Optional[datetime] = None
-    onset: Optional[datetime] = None
-    expires: Optional[datetime] = None
-    senderName: Optional[str] = None
-    headline: Optional[str] = None
-    description: Optional[str] = None
-    instruction: Optional[str] = None
-    web: Optional[str] = None
-    contact: Optional[str] = None
-    awareness_level: Optional[str] = None
-    awareness_type: Optional[str] = None
-    areaDesc: Optional[str] = None
-    geocode: Optional[str] = None
+    category: str
+    event: str
+    urgency: str
+    severity: str
+    certainty: str
+    onset: datetime
+    effective: datetime
+    expires: datetime
+    sender: Dict[str, str]
+    headline: Dict[str, str]
+    description: Dict[str, str]
+    awareness_level: str
+    awareness_type: str
+    area: Dict[str, str]
+    country: str
+    geometry: Optional[str] = None
 
-    def __str__(self):
-        return f"""Alert Summary:
-    Title: {self.title}
-    Event: {self.event}
-    Area: {self.areaDesc}
-    Severity: {self.severity}
-    Urgency: {self.urgency}
-    Certainty: {self.certainty}
-    Effective: {self.effective}
-    Expires: {self.expires}
-    Description: {self.description}
-"""
+    def get_available_languages(self) -> List[str]:
+        """Get list of available languages for this warning."""
+        # Since both headline and description should have the same languages,
+        # we can use either one
+        return list(self.description.keys())
 
-class MeteoAlarm:
-    def __init__(self, region: str = None, url: str = None):
-        self.urls = self._load_urls()
-        if region:
-            self.url = self.urls.get(region.lower())
-            if not self.url:
-                raise ValueError(f"Invalid region: {region}")
-        elif url:
-            self.url = url
-        else:
-            raise ValueError("Either 'region' or 'url' must be provided")
+    def get_description(self, lang: str = "en-EN") -> Optional[str]:
+        """
+        Get description in specified language.
+        Returns None if language is not available.
+        """
+        return self.description.get(lang)
 
-        self.ns = {
-            'atom': 'http://www.w3.org/2005/Atom',
-            'cap': 'urn:oasis:names:tc:emergency:cap:1.2'
-        }
-        self.entries = self._parse()
+    def get_headline(self, lang: str = "en-EN") -> Optional[str]:
+        """
+        Get headline in specified language.
+        Returns None if language is not available.
+        """
+        return self.headline.get(lang)
 
-    @staticmethod
-    def _load_urls():
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        yaml_path = os.path.join(script_dir, 'assets/MeteoAlarm_urls.yaml')
-        with open(yaml_path, 'r') as file:
-            return yaml.safe_load(file)
+    def __str__(self) -> str:
+        """String representation of the warning using English if available."""
+        # Default to English, fallback to first available language
+        lang = "en-EN"
+        if lang not in self.get_available_languages():
+            lang = self.get_available_languages()[0]
 
-    @classmethod
-    def getRegions(cls):
-        return list(cls._load_urls().keys())
+        return (f"Weather Warning for {self.area['areaDesc']} ({self.country})\n"
+                f"Headline: {self.get_headline(lang)}\n"
+                f"Severity: {self.severity}\n"
+                f"Valid until: {self.expires}")
 
-    def _parse(self) -> List[Alert]:
-        response = requests.get(self.url)
-        root = ET.fromstring(response.content)
-        entries = []
-
-        for entry in root.findall('atom:entry', self.ns):
-            entry_data = {}
-            for child in entry:
-                tag = child.tag.split('}')[-1]
-                if tag in Alert.__annotations__:
-                    if tag in ['updated', 'published']:
-                        entry_data[tag] = datetime.fromisoformat(child.text.rstrip('Z'))
-                    elif tag == 'id':
-                        entry_data['id'] = child.text
-                        detailed_alert = self._fetch_detailed_alert(child.text)
-                        entry_data.update(detailed_alert)
-                    else:
-                        entry_data[tag] = child.text
-
-            entries.append(Alert(**entry_data))
-
-        return entries
-
-    def _fetch_detailed_alert(self, url: str) -> dict:
-        response = requests.get(url)
-        root = ET.fromstring(response.content)
-        alert_data = {}
-    
-        for elem in root.findall('.//cap:*', self.ns):
-            tag = elem.tag.split('}')[-1]
-            if tag in Alert.__annotations__:
-                if tag in ['sent', 'effective', 'onset', 'expires']:
-                    alert_data[tag] = datetime.fromisoformat(elem.text.rstrip('Z'))
-                elif tag == 'parameter':
-                    value_name = elem.find('cap:valueName', self.ns).text
-                    value = elem.find('cap:value', self.ns).text
-                    if value_name == 'awareness_level':
-                        alert_data['awareness_level'] = value
-                    elif value_name == 'awareness_type':
-                        alert_data['awareness_type'] = value
-                elif tag == 'area':
-                    alert_data['areaDesc'] = elem.find('cap:areaDesc', self.ns).text
-                    geocode = elem.find('cap:geocode', self.ns)
-                    if geocode is not None:
-                        value_name = geocode.find('cap:valueName', self.ns).text
-                        if value_name == 'EMMA_ID':
-                            alert_data['geocode'] = geocode.find('cap:value', self.ns).text
-                else:
-                    alert_data[tag] = elem.text
-    
-        return alert_data
-
-
-    def filter(self, **kwargs):
-        def match_entry(entry):
-            for k, v in kwargs.items():
-                attr_value = getattr(entry, k, None)
+    def matches_filter(self, **kwargs) -> bool:
+        """Check if warning matches all filter criteria."""
+        for key, value in kwargs.items():
+            # Handle nested dictionary attributes
+            if key in ['description', 'headline'] and isinstance(value, str):
+                # Search in all languages
+                if not any(value.lower() in v.lower() for v in getattr(self, key).values()):
+                    return False
+            # Handle dictionary attributes
+            elif key in ['sender', 'area'] and isinstance(value, str):
+                if not any(value.lower() in v.lower() for v in getattr(self, key).values()):
+                    return False
+            # Handle datetime attributes
+            elif key in ['onset', 'effective', 'expires'] and isinstance(value, (datetime, str)):
+                if isinstance(value, str):
+                    try:
+                        value = datetime.fromisoformat(value.replace('Z', '+00:00'))
+                    except ValueError:
+                        return False
+                if getattr(self, key) != value:
+                    return False
+            # Handle regular attributes
+            else:
+                attr_value = getattr(self, key, None)
                 if attr_value is None:
                     return False
-                if isinstance(attr_value, str) and isinstance(v, str):
-                    if v.lower() not in attr_value.lower():
+                if isinstance(attr_value, str) and isinstance(value, str):
+                    if value.lower() not in attr_value.lower():
                         return False
-                elif attr_value != v:
+                elif attr_value != value:
                     return False
-            return True
-        
-        filtered_entries = list(filter(match_entry, self.entries))
-        return filtered_entries[0] if len(filtered_entries) == 1 else filtered_entries
+        return True
+
+class MeteoAlarm:
+    def __init__(self, countries: List[str]):
+        """Initialize and fetch weather warnings for specified countries."""
+        self.country_urls = self._load_urls()
+        self.geocodes = self._load_geocodes()
+        self._warnings = self._get_all_warnings(countries)
+
+    def __iter__(self):
+        """Make the MeteoAlarm object directly iterable."""
+        return iter(self._warnings)
+
+    def __len__(self):
+        """Return the number of warnings."""
+        return len(self._warnings)
+
+    def __getitem__(self, index):
+        """Allow indexing of warnings."""
+        return self._warnings[index]
+
+    def __call__(self):
+        """Allow the object to be called to return all warnings."""
+        return self._warnings
+
+    def _parse_datetime(self, dt_str: str) -> datetime:
+        """Parse datetime string to datetime object."""
+        try:
+            dt = datetime.fromisoformat(dt_str.replace('Z', '+00:00'))
+            return dt.astimezone(pytz.UTC)
+        except ValueError:
+            return None
+
+    def _load_urls(self) -> Dict[str, str]:
+        """Load country URLs from YAML file."""
+        # Get the directory where the package is installed
+        package_dir = os.path.dirname(os.path.abspath(__file__))
+        yaml_path = os.path.join(package_dir, 'assets/MeteoAlarm_urls.yaml')
+
+        try:
+            with open(yaml_path, 'r') as file:
+                return yaml.safe_load(file)
+        except FileNotFoundError:
+            raise FileNotFoundError(f"Country URLs configuration file not found at {yaml_path}")
+        except yaml.YAMLError as e:
+            raise ValueError(f"Error parsing country URLs configuration: {str(e)}")
+
+    def _load_geocodes(self) -> Dict[str, str]:
+        """Load geocodes from JSON file."""
+        package_dir = os.path.dirname(os.path.abspath(__file__))
+        json_path = os.path.join(package_dir, 'assets/geocodes.json')
+
+        try:
+            with open(json_path, 'r') as file:
+                data = json.load(file)
+                # Create a dictionary mapping EMMA_IDs to geometries
+                geocodes = {}
+                for feature in data['features']:
+                    if feature['properties']['type'] == 'EMMA_ID':
+                        emma_id = feature['properties']['code']
+                        geometry = json.dumps(feature['geometry'])  # Convert geometry to string
+                        geocodes[emma_id] = geometry
+                return geocodes
+        except FileNotFoundError:
+            raise FileNotFoundError(f"Geocodes file not found at {json_path}")
+        except json.JSONDecodeError as e:
+            raise ValueError(f"Error parsing geocodes file: {str(e)}")
+
+    def _get_parameter_value(self, info: ET.Element, param_name: str) -> Optional[str]:
+        """Extract parameter value from info element."""
+        for param in info.findall(f".//{{{NAMESPACE_CAP}}}parameter"):
+            name = param.find(f"{{{NAMESPACE_CAP}}}valueName")
+            value = param.find(f"{{{NAMESPACE_CAP}}}value")
+            if name is not None and value is not None and name.text == param_name:
+                return value.text.split(';')[0].strip()
+        return None
+
+    def _parse_warning_xml(self, xml_content: str, country: str) -> Alert:
+        """Parse individual warning XML and create Alert object."""
+        root = ET.fromstring(xml_content)
+        descriptions = {}
+        headlines = {}  # New dictionary for headlines
+        sender = {}
+        area = {}
+
+        # Get base info from first info element
+        first_info = root.find(f".//{{{NAMESPACE_CAP}}}info")
+
+        # Parse area information
+        area_elem = first_info.find(f".//{{{NAMESPACE_CAP}}}area")
+        if area_elem is not None:
+            area['areaDesc'] = area_elem.find(f".//{{{NAMESPACE_CAP}}}areaDesc").text
+            geocode = area_elem.find(f".//{{{NAMESPACE_CAP}}}geocode")
+            if geocode is not None:
+                emma_id = geocode.find(f".//{{{NAMESPACE_CAP}}}value").text
+                area['EMMA_ID'] = emma_id
+                # Get geometry for this EMMA_ID
+                geometry = self.geocodes.get(emma_id)
+            else:
+                geometry = None
+
+        # Collect descriptions and headlines in different languages
+        for info in root.findall(f".//{{{NAMESPACE_CAP}}}info"):
+            lang = info.find(f".//{{{NAMESPACE_CAP}}}language").text
+            desc = info.find(f".//{{{NAMESPACE_CAP}}}description").text
+            headline = info.find(f".//{{{NAMESPACE_CAP}}}headline").text
+            descriptions[lang] = desc
+            headlines[lang] = headline
+
+        # Collect sender information
+        sender.update({
+            'sender': root.find(f".//{{{NAMESPACE_CAP}}}sender").text,
+            'senderName': first_info.find(f".//{{{NAMESPACE_CAP}}}senderName").text,
+            'contact': first_info.find(f".//{{{NAMESPACE_CAP}}}contact").text,
+            'web': first_info.find(f".//{{{NAMESPACE_CAP}}}web").text
+        })
+
+        return Alert(
+            category=first_info.find(f".//{{{NAMESPACE_CAP}}}category").text,
+            event=first_info.find(f".//{{{NAMESPACE_CAP}}}event").text,
+            urgency=first_info.find(f".//{{{NAMESPACE_CAP}}}urgency").text,
+            severity=first_info.find(f".//{{{NAMESPACE_CAP}}}severity").text,
+            certainty=first_info.find(f".//{{{NAMESPACE_CAP}}}certainty").text,
+            onset=self._parse_datetime(first_info.find(f".//{{{NAMESPACE_CAP}}}onset").text),
+            effective=self._parse_datetime(first_info.find(f".//{{{NAMESPACE_CAP}}}effective").text),
+            expires=self._parse_datetime(first_info.find(f".//{{{NAMESPACE_CAP}}}expires").text),
+            sender=sender,
+            headline=headlines,  # Now passing the dictionary of headlines
+            description=descriptions,
+            awareness_level=self._get_parameter_value(first_info, "awareness_level"),
+            awareness_type=self._get_parameter_value(first_info, "awareness_type"),
+            area=area,
+            country=country,
+            geometry=geometry
+        )
+
+    def _get_warnings_for_country(self, country: str) -> List[Alert]:
+        """Get weather warnings for a specific country."""
+        url = self.country_urls.get(country.lower())
+        if not url:
+            raise ValueError(f"No URL configuration found for country: {country}")
+
+        response = requests.get(url)
+        response.raise_for_status()
+
+        root = ET.fromstring(response.content)
+        warnings = []
+
+        for entry in root.findall(f".//{{{NAMESPACE_ATOM}}}entry"):
+            warning_link = entry.find(f".//{{{NAMESPACE_ATOM}}}link[@type='application/cap+xml']")
+            if warning_link is not None:
+                warning_url = warning_link.get('href')
+                warning_response = requests.get(warning_url)
+                warning_response.raise_for_status()
+                warning = self._parse_warning_xml(warning_response.content, country)
+                warnings.append(warning)
+
+        return warnings
+
+    def _get_all_warnings(self, countries: List[str]) -> List[Alert]:
+        """Get all weather warnings for the specified countries as a single list."""
+        all_warnings = []
+        for country in countries:
+            try:
+                country_warnings = self._get_warnings_for_country(country)
+                all_warnings.extend(country_warnings)
+            except Exception as e:
+                print(f"Error fetching warnings for {country}: {str(e)}")
+        return all_warnings
+
+    def available_languages(self) -> Set[str]:
+        """Return a set of all available languages across all warnings."""
+        languages = set()
+        for warning in self._warnings:
+            languages.update(warning.available_languages())
+        return languages
+
+    def filter(self, **kwargs) -> 'MeteoAlarm':
+        filtered_instance = MeteoAlarm([])  # Create empty instance
+        filtered_instance._warnings = [
+            warning for warning in self._warnings 
+            if warning.matches_filter(**kwargs)
+        ]
+        return filtered_instance
