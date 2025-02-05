@@ -130,38 +130,26 @@ class MeteoAlarm:
 
     def _load_urls(self) -> Dict[str, str]:
         """Load country URLs from YAML file."""
-        # Get the directory where the package is installed
-        package_dir = os.path.dirname(os.path.abspath(__file__))
-        yaml_path = os.path.join(package_dir, 'assets/MeteoAlarm_urls.yaml')
-
         try:
-            with open(yaml_path, 'r') as file:
+            with resources.files('meteoalarm.assets').joinpath('MeteoAlarm_urls.yaml').open('r') as file:
                 return yaml.safe_load(file)
-        except FileNotFoundError:
-            raise FileNotFoundError(f"Country URLs configuration file not found at {yaml_path}")
-        except yaml.YAMLError as e:
-            raise ValueError(f"Error parsing country URLs configuration: {str(e)}")
+        except Exception as e:
+            raise FileNotFoundError(f"Error loading country URLs configuration: {str(e)}")
 
     def _load_geocodes(self) -> Dict[str, str]:
         """Load geocodes from JSON file."""
-        package_dir = os.path.dirname(os.path.abspath(__file__))
-        json_path = os.path.join(package_dir, 'assets/geocodes.json')
-
         try:
-            with open(json_path, 'r') as file:
+            with resources.files('meteoalarm.assets').joinpath('geocodes.json').open('r') as file:
                 data = json.load(file)
-                # Create a dictionary mapping EMMA_IDs to geometries
                 geocodes = {}
                 for feature in data['features']:
                     if feature['properties']['type'] == 'EMMA_ID':
                         emma_id = feature['properties']['code']
-                        geometry = json.dumps(feature['geometry'])  # Convert geometry to string
+                        geometry = json.dumps(feature['geometry'])
                         geocodes[emma_id] = geometry
                 return geocodes
-        except FileNotFoundError:
-            raise FileNotFoundError(f"Geocodes file not found at {json_path}")
-        except json.JSONDecodeError as e:
-            raise ValueError(f"Error parsing geocodes file: {str(e)}")
+        except Exception as e:
+            raise FileNotFoundError(f"Error loading geocodes: {str(e)}")
 
     def _get_parameter_value(self, info: ET.Element, param_name: str) -> Optional[str]:
         """Extract parameter value from info element."""
