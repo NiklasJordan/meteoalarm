@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "meteoalarm"
-version = "0.1.0"
+version = "0.1.1"
 description = "A Python library for accessing MeteoAlarm weather warnings"
 authors = [{name = "Niklas Jordan", email = "hello@niklasjordan.com"}]
 license = {file = "LICENSE"}
@@ -16,7 +16,16 @@ classifiers = [
 ]
 dependencies = [
     "requests>=2.25.0",
+    "pyyaml>=5.1",
+    "pytz>=2021.1"
 ]
+
+[tool.setuptools.package-data]
+"meteoalarm.assets" = ["*.yaml", "*.json"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["meteoalarm*"]
 
 [tool.pytest]
 pythonpath = "src"
