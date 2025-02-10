@@ -1,5 +1,6 @@
 import datetime
 from dataclasses import dataclass
+from importlib import resources
 from typing import Dict, List, Optional, Set
 import requests
 import xml.etree.ElementTree as ET
