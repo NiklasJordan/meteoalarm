@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "meteoalarm"
-version = "0.1.8"
+version = "0.1.9"
 description = "A Python library for accessing MeteoAlarm weather warnings"
 authors = [{name = "Niklas Jordan", email = "hello@niklasjordan.com"}]
 license = {file = "LICENSE"}
