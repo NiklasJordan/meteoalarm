@@ -16,6 +16,7 @@ NAMESPACE_ATOM = "http://www.w3.org/2005/Atom"
 
 @dataclass
 class Alert:
+    identifier: str
     category: str
     event: str
     urgency: str
@@ -169,6 +170,9 @@ class MeteoAlarm:
         sender = {}
         area = {}
 
+        # Get the identifier from the root element
+        identifier = root.find(f".//{{{NAMESPACE_CAP}}}identifier").text
+
         # Get base info from first info element
         first_info = root.find(f".//{{{NAMESPACE_CAP}}}info")
 
@@ -202,6 +206,7 @@ class MeteoAlarm:
         })
 
         return Alert(
+            identifier=identifier,
             category=first_info.find(f".//{{{NAMESPACE_CAP}}}category").text,
             event=first_info.find(f".//{{{NAMESPACE_CAP}}}event").text,
             urgency=first_info.find(f".//{{{NAMESPACE_CAP}}}urgency").text,
