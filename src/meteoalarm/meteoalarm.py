@@ -162,91 +162,111 @@ class MeteoAlarm:
                 return value.text.split(';')[0].strip()
         return None
 
-    def _parse_warning_xml(self, xml_content: str, country: str) -> Alert:
-        """Parse individual warning XML and create Alert object."""
-        root = ET.fromstring(xml_content)
-        descriptions = {}
-        headlines = {}  # New dictionary for headlines
-        sender = {}
-        area = {}
+    def _parse_warning_xml(self, xml_content: str, country: str) -> Optional[WeatherWarning]:
+        """Parse individual warning XML and create WeatherWarning object."""
+        try:
+            root = ET.fromstring(xml_content)
+            first_info = root.find(f".//{{{NAMESPACE_CAP}}}info")
+    
+            # If no info element is found, return None
+            if first_info is None:
+                return None
+    
+            # Helper function to safely get text from XML element
+            def safe_get_text(element, path: str, default: str = None) -> Optional[str]:
+                elem = element.find(path)
+                return elem.text if elem is not None else default
+    
+            # Helper function to safely get sender info
+            def get_sender_info() -> Dict[str, str]:
+                sender = {}
+                sender['sender'] = safe_get_text(root, f".//{{{NAMESPACE_CAP}}}sender", '')
+                sender['senderName'] = safe_get_text(first_info, f".//{{{NAMESPACE_CAP}}}senderName", '')
+                sender['contact'] = safe_get_text(first_info, f".//{{{NAMESPACE_CAP}}}contact", '')
+                sender['web'] = safe_get_text(first_info, f".//{{{NAMESPACE_CAP}}}web", '')
+                return sender
+    
+            # Helper function to safely get area info
+            def get_area_info() -> Dict[str, str]:
+                area = {}
+                area_elem = first_info.find(f".//{{{NAMESPACE_CAP}}}area")
+                if area_elem is not None:
+                    area['areaDesc'] = safe_get_text(area_elem, f".//{{{NAMESPACE_CAP}}}areaDesc", '')
+                    geocode = area_elem.find(f".//{{{NAMESPACE_CAP}}}geocode")
+                    if geocode is not None:
+                        area['EMMA_ID'] = safe_get_text(geocode, f".//{{{NAMESPACE_CAP}}}value", '')
+                return area
+    
+            # Get descriptions in different languages
+            descriptions = {}
+            headlines = {}
+            for info in root.findall(f".//{{{NAMESPACE_CAP}}}info"):
+                lang = safe_get_text(info, f".//{{{NAMESPACE_CAP}}}language")
+                if lang:
+                    desc = safe_get_text(info, f".//{{{NAMESPACE_CAP}}}description")
+                    headline = safe_get_text(info, f".//{{{NAMESPACE_CAP}}}headline")
+                    if desc:
+                        descriptions[lang] = desc
+                    if headline:
+                        headlines[lang] = headline
+    
+            return WeatherWarning(
+                identifier=safe_get_text(root, f".//{{{NAMESPACE_CAP}}}identifier", ''),
+                category=safe_get_text(first_info, f".//{{{NAMESPACE_CAP}}}category", ''),
+                event=safe_get_text(first_info, f".//{{{NAMESPACE_CAP}}}event", ''),
+                urgency=safe_get_text(first_info, f".//{{{NAMESPACE_CAP}}}urgency", ''),
+                severity=safe_get_text(first_info, f".//{{{NAMESPACE_CAP}}}severity", ''),
+                certainty=safe_get_text(first_info, f".//{{{NAMESPACE_CAP}}}certainty", ''),
+                onset=self._parse_datetime(safe_get_text(first_info, f".//{{{NAMESPACE_CAP}}}onset")),
+                effective=self._parse_datetime(safe_get_text(first_info, f".//{{{NAMESPACE_CAP}}}effective")),
+                expires=self._parse_datetime(safe_get_text(first_info, f".//{{{NAMESPACE_CAP}}}expires")),
+                sender=get_sender_info(),
+                headline=headlines,
+                description=descriptions,
+                awareness_level=self._get_parameter_value(first_info, "awareness_level", ''),
+                awareness_type=self._get_parameter_value(first_info, "awareness_type", ''),
+                area=get_area_info(),
+                country=country,
+                geometry=self.geocodes.get(get_area_info().get('EMMA_ID'))
+            )
+        except Exception as e:
+            print(f"Error parsing warning for {country}: {str(e)}")
+            return None
 
-        # Get the identifier from the root element
-        identifier = root.find(f".//{{{NAMESPACE_CAP}}}identifier").text
-
-        # Get base info from first info element
-        first_info = root.find(f".//{{{NAMESPACE_CAP}}}info")
-
-        # Parse area information
-        area_elem = first_info.find(f".//{{{NAMESPACE_CAP}}}area")
-        if area_elem is not None:
-            area['areaDesc'] = area_elem.find(f".//{{{NAMESPACE_CAP}}}areaDesc").text
-            geocode = area_elem.find(f".//{{{NAMESPACE_CAP}}}geocode")
-            if geocode is not None:
-                emma_id = geocode.find(f".//{{{NAMESPACE_CAP}}}value").text
-                area['EMMA_ID'] = emma_id
-                # Get geometry for this EMMA_ID
-                geometry = self.geocodes.get(emma_id)
-            else:
-                geometry = None
-
-        # Collect descriptions and headlines in different languages
-        for info in root.findall(f".//{{{NAMESPACE_CAP}}}info"):
-            lang = info.find(f".//{{{NAMESPACE_CAP}}}language").text
-            desc = info.find(f".//{{{NAMESPACE_CAP}}}description").text
-            headline = info.find(f".//{{{NAMESPACE_CAP}}}headline").text
-            descriptions[lang] = desc
-            headlines[lang] = headline
-
-        # Collect sender information
-        sender.update({
-            'sender': root.find(f".//{{{NAMESPACE_CAP}}}sender").text,
-            'senderName': first_info.find(f".//{{{NAMESPACE_CAP}}}senderName").text,
-            'contact': first_info.find(f".//{{{NAMESPACE_CAP}}}contact").text,
-            'web': first_info.find(f".//{{{NAMESPACE_CAP}}}web").text
-        })
-
-        return Alert(
-            identifier=identifier,
-            category=first_info.find(f".//{{{NAMESPACE_CAP}}}category").text,
-            event=first_info.find(f".//{{{NAMESPACE_CAP}}}event").text,
-            urgency=first_info.find(f".//{{{NAMESPACE_CAP}}}urgency").text,
-            severity=first_info.find(f".//{{{NAMESPACE_CAP}}}severity").text,
-            certainty=first_info.find(f".//{{{NAMESPACE_CAP}}}certainty").text,
-            onset=self._parse_datetime(first_info.find(f".//{{{NAMESPACE_CAP}}}onset").text),
-            effective=self._parse_datetime(first_info.find(f".//{{{NAMESPACE_CAP}}}effective").text),
-            expires=self._parse_datetime(first_info.find(f".//{{{NAMESPACE_CAP}}}expires").text),
-            sender=sender,
-            headline=headlines,  # Now passing the dictionary of headlines
-            description=descriptions,
-            awareness_level=self._get_parameter_value(first_info, "awareness_level"),
-            awareness_type=self._get_parameter_value(first_info, "awareness_type"),
-            area=area,
-            country=country,
-            geometry=geometry
-        )
-
-    def _get_warnings_for_country(self, country: str) -> List[Alert]:
+    def _get_warnings_for_country(self, country: str) -> List[WeatherWarning]:
         """Get weather warnings for a specific country."""
-        url = self.country_urls.get(country.lower())
-        if not url:
-            raise ValueError(f"No URL configuration found for country: {country}")
-
-        response = requests.get(url)
-        response.raise_for_status()
-
-        root = ET.fromstring(response.content)
-        warnings = []
-
-        for entry in root.findall(f".//{{{NAMESPACE_ATOM}}}entry"):
-            warning_link = entry.find(f".//{{{NAMESPACE_ATOM}}}link[@type='application/cap+xml']")
-            if warning_link is not None:
-                warning_url = warning_link.get('href')
-                warning_response = requests.get(warning_url)
-                warning_response.raise_for_status()
-                warning = self._parse_warning_xml(warning_response.content, country)
-                warnings.append(warning)
-
-        return warnings
+        try:
+            url = self.country_urls.get(country.lower())
+            if not url:
+                raise ValueError(f"No URL configuration found for country: {country}")
+    
+            # Get the Atom feed
+            response = requests.get(url)
+            response.raise_for_status()
+    
+            root = ET.fromstring(response.content)
+            warnings = []
+    
+            # Process each entry in the feed
+            for entry in root.findall(f".//{{{NAMESPACE_ATOM}}}entry"):
+                try:
+                    warning_link = entry.find(f".//{{{NAMESPACE_ATOM}}}link[@type='application/cap+xml']")
+                    if warning_link is not None:
+                        warning_url = warning_link.get('href')
+                        warning_response = requests.get(warning_url)
+                        warning_response.raise_for_status()
+    
+                        warning = self._parse_warning_xml(warning_response.content, country)
+                        if warning:
+                            warnings.append(warning)
+                except Exception as e:
+                    print(f"Error processing entry for {country}: {str(e)}")
+                    continue
+    
+            return warnings
+        except Exception as e:
+            print(f"Error fetching warnings for {country}: {str(e)}")
+            return []
 
     def _get_all_warnings(self, countries: List[str]) -> List[Alert]:
         """Get all weather warnings for the specified countries as a single list."""
