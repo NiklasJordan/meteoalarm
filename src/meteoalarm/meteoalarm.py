@@ -162,8 +162,8 @@ class MeteoAlarm:
                 return value.text.split(';')[0].strip()
         return None
 
-    def _parse_warning_xml(self, xml_content: str, country: str) -> Optional[WeatherWarning]:
-        """Parse individual warning XML and create WeatherWarning object."""
+    def _parse_warning_xml(self, xml_content: str, country: str) -> Optional[Alert]:
+        """Parse individual warning XML and create Alert object."""
         try:
             root = ET.fromstring(xml_content)
             first_info = root.find(f".//{{{NAMESPACE_CAP}}}info")
@@ -210,7 +210,7 @@ class MeteoAlarm:
                     if headline:
                         headlines[lang] = headline
     
-            return WeatherWarning(
+            return Alert(
                 identifier=safe_get_text(root, f".//{{{NAMESPACE_CAP}}}identifier", ''),
                 category=safe_get_text(first_info, f".//{{{NAMESPACE_CAP}}}category", ''),
                 event=safe_get_text(first_info, f".//{{{NAMESPACE_CAP}}}event", ''),
@@ -233,7 +233,7 @@ class MeteoAlarm:
             print(f"Error parsing warning for {country}: {str(e)}")
             return None
 
-    def _get_warnings_for_country(self, country: str) -> List[WeatherWarning]:
+    def _get_warnings_for_country(self, country: str) -> List[Alert]:
         """Get weather warnings for a specific country."""
         try:
             url = self.country_urls.get(country.lower())
