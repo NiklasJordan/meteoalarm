@@ -14,6 +14,7 @@ import json
 NAMESPACE_CAP = "urn:oasis:names:tc:emergency:cap:1.2"
 NAMESPACE_ATOM = "http://www.w3.org/2005/Atom"
 
+
 @dataclass
 class Alert:
     identifier: str
@@ -99,6 +100,7 @@ class Alert:
                     return False
         return True
 
+
 class MeteoAlarm:
     def __init__(self, countries: List[str]):
         """Initialize and fetch weather warnings for specified countries."""
@@ -121,14 +123,6 @@ class MeteoAlarm:
     def __call__(self):
         """Allow the object to be called to return all warnings."""
         return self._warnings
-
-    def _parse_datetime(self, dt_str: str) -> datetime:
-        """Parse datetime string to datetime object."""
-        try:
-            dt = datetime.fromisoformat(dt_str.replace('Z', '+00:00'))
-            return dt.astimezone(pytz.UTC)
-        except ValueError:
-            return None
 
     def _load_urls(self) -> Dict[str, str]:
         """Load country URLs from YAML file."""
@@ -153,51 +147,46 @@ class MeteoAlarm:
         except Exception as e:
             raise FileNotFoundError(f"Error loading geocodes: {str(e)}")
 
-    def _get_parameter_value(self, info: ET.Element, param_name: str) -> Optional[str]:
-        """Extract parameter value from info element."""
-        for param in info.findall(f".//{{{NAMESPACE_CAP}}}parameter"):
-            name = param.find(f"{{{NAMESPACE_CAP}}}valueName")
-            value = param.find(f"{{{NAMESPACE_CAP}}}value")
-            if name is not None and value is not None and name.text == param_name:
-                return value.text.split(';')[0].strip()
-        return None
+    def _parse_datetime(self, dt_str: Optional[str]) -> Optional[datetime]:
+        """Parse datetime string to datetime object with proper error handling."""
+        if not dt_str:
+            return None
+        try:
+            dt = datetime.fromisoformat(dt_str.replace('Z', '+00:00'))
+            return dt.astimezone(pytz.UTC)
+        except (ValueError, AttributeError):
+            return None
+
+    def _get_parameter_value(self, info: ET.Element, param_name: str, default: str = '') -> str:
+        """Extract parameter value from info element with proper error handling."""
+        try:
+            for param in info.findall(f".//{{{NAMESPACE_CAP}}}parameter"):
+                name = param.find(f"{{{NAMESPACE_CAP}}}valueName")
+                value = param.find(f"{{{NAMESPACE_CAP}}}value")
+                if name is not None and value is not None and name.text == param_name:
+                    return value.text.split(';')[0].strip()
+            return default
+        except (AttributeError, IndexError):
+            return default
 
     def _parse_warning_xml(self, xml_content: str, country: str) -> Optional[Alert]:
         """Parse individual warning XML and create Alert object."""
         try:
             root = ET.fromstring(xml_content)
             first_info = root.find(f".//{{{NAMESPACE_CAP}}}info")
-    
-            # If no info element is found, return None
+
             if first_info is None:
                 return None
-    
+
             # Helper function to safely get text from XML element
-            def safe_get_text(element, path: str, default: str = None) -> Optional[str]:
-                elem = element.find(path)
-                return elem.text if elem is not None else default
-    
-            # Helper function to safely get sender info
-            def get_sender_info() -> Dict[str, str]:
-                sender = {}
-                sender['sender'] = safe_get_text(root, f".//{{{NAMESPACE_CAP}}}sender", '')
-                sender['senderName'] = safe_get_text(first_info, f".//{{{NAMESPACE_CAP}}}senderName", '')
-                sender['contact'] = safe_get_text(first_info, f".//{{{NAMESPACE_CAP}}}contact", '')
-                sender['web'] = safe_get_text(first_info, f".//{{{NAMESPACE_CAP}}}web", '')
-                return sender
-    
-            # Helper function to safely get area info
-            def get_area_info() -> Dict[str, str]:
-                area = {}
-                area_elem = first_info.find(f".//{{{NAMESPACE_CAP}}}area")
-                if area_elem is not None:
-                    area['areaDesc'] = safe_get_text(area_elem, f".//{{{NAMESPACE_CAP}}}areaDesc", '')
-                    geocode = area_elem.find(f".//{{{NAMESPACE_CAP}}}geocode")
-                    if geocode is not None:
-                        area['EMMA_ID'] = safe_get_text(geocode, f".//{{{NAMESPACE_CAP}}}value", '')
-                return area
-    
-            # Get descriptions in different languages
+            def safe_get_text(element: Optional[ET.Element], xpath: str, default: str = '') -> str:
+                try:
+                    elem = element.find(xpath) if element is not None else None
+                    return elem.text if elem is not None and elem.text is not None else default
+                except (AttributeError, TypeError):
+                    return default
+
+            # Get descriptions and headlines in different languages
             descriptions = {}
             headlines = {}
             for info in root.findall(f".//{{{NAMESPACE_CAP}}}info"):
@@ -209,25 +198,43 @@ class MeteoAlarm:
                         descriptions[lang] = desc
                     if headline:
                         headlines[lang] = headline
-    
+
+            # Get sender information
+            sender = {
+                'sender': safe_get_text(root, f".//{{{NAMESPACE_CAP}}}sender"),
+                'senderName': safe_get_text(first_info, f".//{{{NAMESPACE_CAP}}}senderName"),
+                'contact': safe_get_text(first_info, f".//{{{NAMESPACE_CAP}}}contact"),
+                'web': safe_get_text(first_info, f".//{{{NAMESPACE_CAP}}}web")
+            }
+
+            # Get area information
+            area = {}
+            area_elem = first_info.find(f".//{{{NAMESPACE_CAP}}}area")
+            if area_elem is not None:
+                area['areaDesc'] = safe_get_text(area_elem, f".//{{{NAMESPACE_CAP}}}areaDesc")
+                geocode = area_elem.find(f".//{{{NAMESPACE_CAP}}}geocode")
+                if geocode is not None:
+                    area['EMMA_ID'] = safe_get_text(geocode, f".//{{{NAMESPACE_CAP}}}value")
+
+            # Create Alert object with proper error handling for all fields
             return Alert(
-                identifier=safe_get_text(root, f".//{{{NAMESPACE_CAP}}}identifier", ''),
-                category=safe_get_text(first_info, f".//{{{NAMESPACE_CAP}}}category", ''),
-                event=safe_get_text(first_info, f".//{{{NAMESPACE_CAP}}}event", ''),
-                urgency=safe_get_text(first_info, f".//{{{NAMESPACE_CAP}}}urgency", ''),
-                severity=safe_get_text(first_info, f".//{{{NAMESPACE_CAP}}}severity", ''),
-                certainty=safe_get_text(first_info, f".//{{{NAMESPACE_CAP}}}certainty", ''),
+                identifier=safe_get_text(root, f".//{{{NAMESPACE_CAP}}}identifier"),
+                category=safe_get_text(first_info, f".//{{{NAMESPACE_CAP}}}category"),
+                event=safe_get_text(first_info, f".//{{{NAMESPACE_CAP}}}event"),
+                urgency=safe_get_text(first_info, f".//{{{NAMESPACE_CAP}}}urgency"),
+                severity=safe_get_text(first_info, f".//{{{NAMESPACE_CAP}}}severity"),
+                certainty=safe_get_text(first_info, f".//{{{NAMESPACE_CAP}}}certainty"),
                 onset=self._parse_datetime(safe_get_text(first_info, f".//{{{NAMESPACE_CAP}}}onset")),
                 effective=self._parse_datetime(safe_get_text(first_info, f".//{{{NAMESPACE_CAP}}}effective")),
                 expires=self._parse_datetime(safe_get_text(first_info, f".//{{{NAMESPACE_CAP}}}expires")),
-                sender=get_sender_info(),
+                sender=sender,
                 headline=headlines,
                 description=descriptions,
-                awareness_level=self._get_parameter_value(first_info, "awareness_level", ''),
-                awareness_type=self._get_parameter_value(first_info, "awareness_type", ''),
-                area=get_area_info(),
+                awareness_level=self._get_parameter_value(first_info, "awareness_level"),
+                awareness_type=self._get_parameter_value(first_info, "awareness_type"),
+                area=area,
                 country=country,
-                geometry=self.geocodes.get(get_area_info().get('EMMA_ID'))
+                geometry=self.geocodes.get(area.get('EMMA_ID'))
             )
         except Exception as e:
             print(f"Error parsing warning for {country}: {str(e)}")
@@ -239,14 +246,14 @@ class MeteoAlarm:
             url = self.country_urls.get(country.lower())
             if not url:
                 raise ValueError(f"No URL configuration found for country: {country}")
-    
+
             # Get the Atom feed
             response = requests.get(url)
             response.raise_for_status()
-    
+
             root = ET.fromstring(response.content)
             warnings = []
-    
+
             # Process each entry in the feed
             for entry in root.findall(f".//{{{NAMESPACE_ATOM}}}entry"):
                 try:
@@ -255,14 +262,14 @@ class MeteoAlarm:
                         warning_url = warning_link.get('href')
                         warning_response = requests.get(warning_url)
                         warning_response.raise_for_status()
-    
+
                         warning = self._parse_warning_xml(warning_response.content, country)
                         if warning:
                             warnings.append(warning)
                 except Exception as e:
                     print(f"Error processing entry for {country}: {str(e)}")
                     continue
-    
+
             return warnings
         except Exception as e:
             print(f"Error fetching warnings for {country}: {str(e)}")
@@ -289,7 +296,7 @@ class MeteoAlarm:
     def filter(self, **kwargs) -> 'MeteoAlarm':
         filtered_instance = MeteoAlarm([])  # Create empty instance
         filtered_instance._warnings = [
-            warning for warning in self._warnings 
+            warning for warning in self._warnings
             if warning.matches_filter(**kwargs)
         ]
         return filtered_instance
