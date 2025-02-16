@@ -19,7 +19,7 @@ NAMESPACE_ATOM = "http://www.w3.org/2005/Atom"
 class Alert:
     identifier: str
     category: str
-    event: str
+    event: Dict[str, str]
     urgency: str
     severity: str
     certainty: str
@@ -54,6 +54,13 @@ class Alert:
         Returns None if language is not available.
         """
         return self.headline.get(lang)
+
+    def get_event(self, lang: str = "en-EN") -> Optional[str]:
+        """
+        Get event in specified language.
+        Returns None if language is not available.
+        """
+        return self.event.get(lang)
 
     def __str__(self) -> str:
         """String representation of the warning using English if available."""
@@ -189,15 +196,19 @@ class MeteoAlarm:
             # Get descriptions and headlines in different languages
             descriptions = {}
             headlines = {}
+            event = {}
             for info in root.findall(f".//{{{NAMESPACE_CAP}}}info"):
                 lang = safe_get_text(info, f".//{{{NAMESPACE_CAP}}}language")
                 if lang:
                     desc = safe_get_text(info, f".//{{{NAMESPACE_CAP}}}description")
                     headline = safe_get_text(info, f".//{{{NAMESPACE_CAP}}}headline")
+                    event = safe_get_text(info, f".//{{{NAMESPACE_CAP}}}event")
                     if desc:
                         descriptions[lang] = desc
                     if headline:
                         headlines[lang] = headline
+                    if event:
+                        event[lang] = event
 
             # Get sender information
             sender = {
@@ -220,7 +231,7 @@ class MeteoAlarm:
             return Alert(
                 identifier=safe_get_text(root, f".//{{{NAMESPACE_CAP}}}identifier"),
                 category=safe_get_text(first_info, f".//{{{NAMESPACE_CAP}}}category"),
-                event=safe_get_text(first_info, f".//{{{NAMESPACE_CAP}}}event"),
+                event=event,
                 urgency=safe_get_text(first_info, f".//{{{NAMESPACE_CAP}}}urgency"),
                 severity=safe_get_text(first_info, f".//{{{NAMESPACE_CAP}}}severity"),
                 certainty=safe_get_text(first_info, f".//{{{NAMESPACE_CAP}}}certainty"),
