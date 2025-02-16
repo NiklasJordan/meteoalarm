@@ -220,9 +220,6 @@ class MeteoAlarm:
                         headlines[lang] = headline
                     if event:
                         event_detail[lang] = event
-
-            # Get polygon information
-            polygon = safe_get_text(first_info, f".//{{{NAMESPACE_CAP}}}polygon", None)
             
             # Get sender information
             sender = {
@@ -241,8 +238,19 @@ class MeteoAlarm:
                 if geocode is not None:
                     area['EMMA_ID'] = safe_get_text(geocode, f".//{{{NAMESPACE_CAP}}}value")
 
-            # Use polygon if available, otherwise use geometry from EMMA_ID
-            geometry = polygon if polygon else self.geocodes.get(area.get('EMMA_ID'))
+            # Get polygon information
+            polygon = safe_get_text(first_info, f".//{{{NAMESPACE_CAP}}}polygon", None)
+            if polygon:
+                coordinates = [
+                    [float(coord) for coord in point.split(',')]
+                    for point in polygon.split()
+                ]
+                geometry = json.dumps({
+                    "type": "Polygon",
+                    "coordinates": [coordinates]
+                })
+            else:
+                geometry = self.geocodes.get(area.get('EMMA_ID'))
         
             # Create Alert object with proper error handling for all fields
             return Alert(
