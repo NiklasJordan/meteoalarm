@@ -41,26 +41,36 @@ class Alert:
         # we can use either one
         return list(self.description.keys())
 
-    def get_description(self, lang: str = "en-EN") -> Optional[str]:
+    def _get_localized_text(self, lang: str, text_dict: Dict[str, str]) -> Optional[str]:
+        """
+        Get text in specified language from a dictionary.
+        If the language is not available, fallback to a language starting with 'en',
+        or the first available language.
+        """
+        if lang not in text_dict:
+            lang = next((l for l in text_dict if l.startswith("en")), self.get_available_languages()[0])
+        return text_dict.get(lang)
+    
+    def get_description(self, lang: str = "en") -> Optional[str]:
         """
         Get description in specified language.
         Returns None if language is not available.
         """
-        return self.description.get(lang)
-
-    def get_headline(self, lang: str = "en-EN") -> Optional[str]:
+        return self._get_localized_text(lang, self.description)
+    
+    def get_headline(self, lang: str = "en") -> Optional[str]:
         """
         Get headline in specified language.
         Returns None if language is not available.
         """
-        return self.headline.get(lang)
-
-    def get_event(self, lang: str = "en-EN") -> Optional[str]:
+        return self._get_localized_text(lang, self.headline)
+    
+    def get_event(self, lang: str = "en") -> Optional[str]:
         """
         Get event in specified language.
         Returns None if language is not available.
         """
-        return self.event.get(lang)
+        return self._get_localized_text(lang, self.event)
 
     def __str__(self) -> str:
         """String representation of the warning using English if available."""
@@ -196,7 +206,8 @@ class MeteoAlarm:
             # Get descriptions and headlines in different languages
             descriptions = {}
             headlines = {}
-            event = {}
+            event_detail = {}
+            polygon = None
             for info in root.findall(f".//{{{NAMESPACE_CAP}}}info"):
                 lang = safe_get_text(info, f".//{{{NAMESPACE_CAP}}}language")
                 if lang:
@@ -208,8 +219,11 @@ class MeteoAlarm:
                     if headline:
                         headlines[lang] = headline
                     if event:
-                        event[lang] = event
+                        event_detail[lang] = event
 
+            # Get polygon information
+            polygon = safe_get_text(first_info, f".//{{{NAMESPACE_CAP}}}polygon", None)
+            
             # Get sender information
             sender = {
                 'sender': safe_get_text(root, f".//{{{NAMESPACE_CAP}}}sender"),
@@ -227,11 +241,14 @@ class MeteoAlarm:
                 if geocode is not None:
                     area['EMMA_ID'] = safe_get_text(geocode, f".//{{{NAMESPACE_CAP}}}value")
 
+            # Use polygon if available, otherwise use geometry from EMMA_ID
+            geometry = polygon if polygon else self.geocodes.get(area.get('EMMA_ID'))
+        
             # Create Alert object with proper error handling for all fields
             return Alert(
                 identifier=safe_get_text(root, f".//{{{NAMESPACE_CAP}}}identifier"),
                 category=safe_get_text(first_info, f".//{{{NAMESPACE_CAP}}}category"),
-                event=event,
+                event=event_detail,
                 urgency=safe_get_text(first_info, f".//{{{NAMESPACE_CAP}}}urgency"),
                 severity=safe_get_text(first_info, f".//{{{NAMESPACE_CAP}}}severity"),
                 certainty=safe_get_text(first_info, f".//{{{NAMESPACE_CAP}}}certainty"),
@@ -245,7 +262,7 @@ class MeteoAlarm:
                 awareness_type=self._get_parameter_value(first_info, "awareness_type"),
                 area=area,
                 country=country,
-                geometry=self.geocodes.get(area.get('EMMA_ID'))
+                geometry=geometry
             )
         except Exception as e:
             print(f"Error parsing warning for {country}: {str(e)}")
