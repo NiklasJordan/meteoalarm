@@ -1,1 +1,12 @@
+# Table of contents
+# Learn more at https://jupyterbook.org/customize/toc.html
 
+format: jb-book
+root: warning_maps
+parts:
+- caption: Introduction
+  chapters:
+  - file: warning_maps
+- caption: Examples
+  chapters:
+  - file: warning_maps
