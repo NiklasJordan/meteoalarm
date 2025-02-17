@@ -9,9 +9,12 @@ author = 'Niklas Jordan'
 
 extensions = [
     'sphinx_inline_tabs',
+    'sphinx_external_toc',
 ]
 
 exclude_patterns = []
+external_toc_path = '_toc.yml'
+templates_path = ['_templates']
 
 # -- Options for HTML output -------------------------------------------------
 
