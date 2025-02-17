@@ -7,6 +7,10 @@ author = 'Niklas Jordan'
 
 # -- General configuration ---------------------------------------------------
 
+extensions = [
+    'sphinx_inline_tabs',
+]
+
 exclude_patterns = []
 
 # -- Options for HTML output -------------------------------------------------
