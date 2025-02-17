@@ -121,8 +121,22 @@ class Alert:
 class MeteoAlarm:
     def __init__(self, countries: List[str]):
         """Initialize and fetch weather warnings for specified countries."""
+        if countries is None:
+            raise ValueError("Countries list cannot be None")
+        if not isinstance(countries, list):
+            raise ValueError("Countries must be provided as a list")
+        if not countries:
+            raise ValueError("No countries provided")
+
+        """Initialize and fetch weather warnings for specified countries."""
         self.country_urls = self._load_urls()
         self.geocodes = self._load_geocodes()
+
+        # Check all countries before proceeding
+        for country in countries:
+            if country.lower() not in self.country_urls:
+                raise ValueError(f"No URL configuration found for country: {country}")
+
         self._warnings = self._get_all_warnings(countries)
 
     def __iter__(self):
@@ -278,11 +292,11 @@ class MeteoAlarm:
 
     def _get_warnings_for_country(self, country: str) -> List[Alert]:
         """Get weather warnings for a specific country."""
-        try:
-            url = self.country_urls.get(country.lower())
-            if not url:
-                raise ValueError(f"No URL configuration found for country: {country}")
+        url = self.country_urls.get(country.lower())
+        if not url:
+            raise ValueError(f"No URL configuration found for country: {country}")
 
+        try:
             # Get the Atom feed
             response = requests.get(url)
             response.raise_for_status()
@@ -326,13 +340,16 @@ class MeteoAlarm:
         """Return a set of all available languages across all warnings."""
         languages = set()
         for warning in self._warnings:
-            languages.update(warning.available_languages())
+            languages.update(warning.get_available_languages())
         return languages
 
-    def filter(self, **kwargs) -> 'MeteoAlarm':
-        filtered_instance = MeteoAlarm([])  # Create empty instance
-        filtered_instance._warnings = [
-            warning for warning in self._warnings
-            if warning.matches_filter(**kwargs)
-        ]
-        return filtered_instance
+    def filter(self, **kwargs) -> List[Alert]:
+        """
+        Filter warnings based on provided criteria.
+        Returns a list of warnings that match ALL criteria.
+        """
+        filtered_warnings = []
+        for warning in self._warnings:
+            if warning.matches_filter(**kwargs):
+                filtered_warnings.append(warning)
+        return filtered_warnings
