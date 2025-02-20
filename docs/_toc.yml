@@ -2,11 +2,20 @@
 # Learn more at https://jupyterbook.org/customize/toc.html
 
 format: jb-book
-root: intro
+root: introduction
 parts:
-- caption: Introduction
+- caption: Getting Started
   chapters:
   - file: introduction
+  - file: installation
+  - file: quickstart
+  - file: warnings
 - caption: Examples
   chapters:
-  - file: warning_maps
+  - file: examples/basics
+  - file: examples/warning_maps
+- caption: About the package
+  chapters:
+  - file: changelog
+  - file: contribute
+  - file: cite
