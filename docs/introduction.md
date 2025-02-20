@@ -5,8 +5,7 @@
 A Python library for accessing and filtering weather warnings from MeteoAlarm's CAP (Common Alerting Protocol) feeds. This library provides easy access to weather warnings across European countries through MeteoAlarm's official feeds.
 
 ```{note}
-    MeteoAlarm Python libraries interface are not guaranteed stable and may change until version
-    1.0 when backwards compatibility will be a main focus.
+MeteoAlarm Python libraries interface are not guaranteed stable and may change until version 1.0 when backwards compatibility will be a main focus.
 ```
 
 ## Features
