@@ -10,7 +10,7 @@
 :::{grid-item}
 :columns: 12 4 4 4
 
-```{image} _static/logo-square.svg
+```{image} meteoalarm-lib.png
 :width: 200px
 :class: sd-m-auto
 :name: landing-page-logo
