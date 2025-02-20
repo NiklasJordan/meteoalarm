@@ -1,6 +1,8 @@
-# MeteoAlarm Python library
+---
+sd_hide_title: true
+---
 
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.14885078.svg)](https://doi.org/10.5281/zenodo.14885078) ![PyPI - Downloads](https://img.shields.io/pypi/dm/meteoalarm?label=PyPI%20Downloads&labelColor=blue&color=black&link=https%3A%2F%2Fpypi.org%2Fproject%2Fmeteoalarm%2F)
+# MeteoAlarm Python library
 
 ::::{grid}
 :reverse:
@@ -26,8 +28,9 @@
 ```{rubric} MyST - Markedly Structured Text - Parser
 ```
 
-A Sphinx and Docutils extension to parse MyST,
-a rich and extensible flavour of Markdown for authoring technical and scientific documentation.
+A Python library for accessing and filtering weather warnings from MeteoAlarm's CAP (Common Alerting Protocol) feeds. This library provides easy access to weather warnings across European countries through MeteoAlarm's official feeds.
+
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.14885078.svg)](https://doi.org/10.5281/zenodo.14885078) ![PyPI - Downloads](https://img.shields.io/pypi/dm/meteoalarm?label=PyPI%20Downloads&labelColor=blue&color=black&link=https%3A%2F%2Fpypi.org%2Fproject%2Fmeteoalarm%2F)
 
 ````{div} sd-d-flex-row
 ```{button-ref} intro
@@ -47,7 +50,52 @@ Live Demo
 ```
 ````
 
-A Python library for accessing and filtering weather warnings from MeteoAlarm's CAP (Common Alerting Protocol) feeds. This library provides easy access to weather warnings across European countries through MeteoAlarm's official feeds.
+:::
+
+::::
+
+---
+
+::::{grid} 1 2 2 3
+:gutter: 1 1 1 2
+
+:::{grid-item-card} {octicon}`markdown;1.5em;sd-mr-1` CommonMark-plus
+:link: syntax/core
+:link-type: ref
+
+MyST extends the CommonMark syntax specification, to support technical authoring features such as tables and footnotes.
+
++++
+[Learn more »](syntax/core)
+:::
+
+:::{grid-item-card} {octicon}`plug;1.5em;sd-mr-1` Sphinx compatible
+:link: roles-directives
+:link-type: ref
+
+Use the MyST role and directive syntax to harness the full capability of Sphinx, such as admonitions and figures, and all existing Sphinx extensions.
+
++++
+[Learn more »](roles-directives)
+:::
+
+:::{grid-item-card} {octicon}`tools;1.5em;sd-mr-1` Highly configurable
+:link: configuration
+:link-type: doc
+
+MyST-parser can be configured at both the global and individual document level,
+to modify parsing behaviour and access extended syntax features.
+
++++
+[Learn more »](configuration)
+:::
+
+::::
+
+---
+
+```{rubric} Additional resources
+```
 
 ```{note}
 MeteoAlarm Python libraries interface are not guaranteed stable and may change until version 1.0 when backwards compatibility will be a main focus.
