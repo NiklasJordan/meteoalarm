@@ -88,7 +88,7 @@ Learn what MeteoAlarm warnings are, which information they contain and how to in
 
 ```{rubric} License
 ```
-This project is licensed under the MIT License - see the LICENSE file for details.
+This project is licensed under the MIT License - see the [LICENSE](https://github.com/NiklasJordan/meteoalarm/blob/main/LICENSE) file for details.
 
 ```{toctree}
 :hidden:
