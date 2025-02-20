@@ -56,7 +56,6 @@ MeteoAlarm Python libraries interface are not guaranteed stable and may change u
 :gutter: 1 1 1 2
 
 :::{grid-item-card} {octicon}`markdown;1.5em;sd-mr-1` Installation
-:link: syntax/core
 :link-type: ref
 
 Learn how to install the library via PyPI or from source.
@@ -66,7 +65,6 @@ Learn how to install the library via PyPI or from source.
 :::
 
 :::{grid-item-card} {octicon}`plug;1.5em;sd-mr-1` Quickstart
-:link: roles-directives
 :link-type: ref
 
 Learn the basic components and how to query for desired warnings.
@@ -75,15 +73,13 @@ Learn the basic components and how to query for desired warnings.
 [Learn more »](quickstart)
 :::
 
-:::{grid-item-card} {octicon}`tools;1.5em;sd-mr-1` Highly configurable
-:link: configuration
-:link-type: doc
+:::{grid-item-card} {octicon}`tools;1.5em;sd-mr-1` MeteoAlarm's Warnings
+:link-type: ref
 
-MyST-parser can be configured at both the global and individual document level,
-to modify parsing behaviour and access extended syntax features.
+Learn what MeteoAlarm warnings are, which information they contain and how to interpret them.
 
 +++
-[Learn more »](configuration)
+[Learn more »](warnings)
 :::
 
 ::::
