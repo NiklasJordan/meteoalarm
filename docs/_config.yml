@@ -29,3 +29,8 @@ html:
     hypothesis              : false
     utterances              : false
   # announcement              : "Test Announcement" # A banner announcement at the top of the site.
+
+repository:
+  url                       : https://github.com/niklasjordan/meteoalarm  # The URL to your book's repository
+  path_to_book              : "docs"  # A path to your book's folder, relative to the repository root.
+  branch                    : main  # Which branch of the repository should be used when creating links
