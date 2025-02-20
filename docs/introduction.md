@@ -93,3 +93,7 @@ to modify parsing behaviour and access extended syntax features.
 ```{rubric} License
 ```
 This project is licensed under the MIT License - see the LICENSE file for details.
+
+```{toctree}
+:hidden:
+```
