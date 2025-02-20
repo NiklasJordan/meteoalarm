@@ -28,4 +28,4 @@ html:
   comments:
     hypothesis              : false
     utterances              : false
-  announcement              : "Test Announcement" # A banner announcement at the top of the site.
+  # announcement              : "Test Announcement" # A banner announcement at the top of the site.
