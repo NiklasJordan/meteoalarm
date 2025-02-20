@@ -6,7 +6,6 @@ root: introduction
 parts:
 - caption: Getting Started
   chapters:
-  - file: introduction
   - file: installation
   - file: quickstart
   - file: warnings
