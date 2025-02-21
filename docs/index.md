@@ -12,7 +12,7 @@ sd_hide_title: true
 :::{grid-item}
 :columns: 12 4 4 4
 
-```{image} meteoalarm-lib.png
+```{image} _static/meteoalarm-logo.png
 :width: 200px
 :class: sd-m-auto
 :name: landing-page-logo
