@@ -7,4 +7,3 @@ sphinx-book-theme
 shapely
 geopandas
 contextily
-json
