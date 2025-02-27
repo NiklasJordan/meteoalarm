@@ -2,7 +2,7 @@
 sd_hide_title: true
 ---
 
-# MeteoAlarm Python library
+# MeteoAlarm Python package
 
 ::::{grid}
 :reverse:
@@ -25,17 +25,17 @@ sd_hide_title: true
 :child-align: justify
 :class: sd-fs-5
 
-```{rubric} MeteoAlarm Python library
+```{rubric} MeteoAlarm Python package
 ```
 
-A Python library for accessing and filtering weather warnings from MeteoAlarm's CAP (Common Alerting Protocol) feeds. This library provides easy access to weather warnings across European countries through MeteoAlarm's official feeds.
+A Python package for accessing and filtering weather warnings from MeteoAlarm's CAP (Common Alerting Protocol) feeds. This package provides easy access to weather warnings across European countries through MeteoAlarm's official feeds.
 
 :::
 
 ::::
 
 ```{note}
-MeteoAlarm Python libraries interface are not guaranteed stable and may change until version 1.0 when backwards compatibility will be a main focus.
+MeteoAlarm Python package interface are not guaranteed stable and may change until version 1.0 when backwards compatibility will be a main focus.
 ```
 
 ---
@@ -58,7 +58,7 @@ MeteoAlarm Python libraries interface are not guaranteed stable and may change u
 :::{grid-item-card} {octicon}`markdown;1.5em;sd-mr-1` Installation
 :link-type: ref
 
-Learn how to install the library via PyPI or from source.
+Learn how to install the package via PyPI or from source.
 
 +++
 [Learn more »](installation)
@@ -88,7 +88,7 @@ Learn what MeteoAlarm warnings are, which information they contain and how to in
 
 ```{rubric} License
 ```
-This project is licensed under the MIT License - see the [LICENSE](https://github.com/NiklasJordan/meteoalarm/blob/main/LICENSE) file for details.
+This project is licensed under the MIT License - see the [LICENSE](https://github.com/NiklasJordan/meteoalarm/blob/main/LICENSE) file for details. Page and logo contains material from EUMETNET/MeteoAlarm (CC BY 4.0).
 
 ```{toctree}
 :hidden:
