@@ -1,9 +1,9 @@
-![MeteoAlarm Python library](https://github.com/NiklasJordan/meteoalarm/blob/main/docs/_static/meteoalarm-header.png)
+![MeteoAlarm Python package](https://github.com/NiklasJordan/meteoalarm/blob/main/docs/_static/meteoalarm-header.png)
 ---
 
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.14885078.svg)](https://doi.org/10.5281/zenodo.14885078) ![PyPI - Downloads](https://img.shields.io/pypi/dm/meteoalarm?label=PyPI%20Downloads&labelColor=blue&color=black&link=https%3A%2F%2Fpypi.org%2Fproject%2Fmeteoalarm%2F)
 
-A Python library for accessing and filtering weather warnings from MeteoAlarm's CAP (Common Alerting Protocol) feeds. This library provides easy access to weather warnings across European countries through MeteoAlarm's official feeds.
+A Python package for accessing and filtering weather warnings from MeteoAlarm's CAP (Common Alerting Protocol) feeds. This package provides easy access to weather warnings across European countries through MeteoAlarm's official feeds.
 
 ## Features
 
@@ -40,7 +40,7 @@ for warning in warnings:
 
 ### Filtering Warnings
 
-The library provides flexible filtering capabilities:
+The package provides flexible filtering capabilities:
 
 ```python
 # Filter by severity
