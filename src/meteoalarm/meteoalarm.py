@@ -9,11 +9,11 @@ import pytz
 import os
 import yaml
 import json
+import logging
 
 # Constants
 NAMESPACE_CAP = "urn:oasis:names:tc:emergency:cap:1.2"
 NAMESPACE_ATOM = "http://www.w3.org/2005/Atom"
-
 
 @dataclass
 class Alert:
@@ -119,18 +119,24 @@ class Alert:
 
 
 class MeteoAlarm:
-    def __init__(self, countries: List[str]):
-        """Initialize and fetch weather warnings for specified countries."""
-        if countries is None:
-            raise ValueError("Countries list cannot be None")
-        if not isinstance(countries, list):
-            raise ValueError("Countries must be provided as a list")
-        if not countries:
-            raise ValueError("No countries provided")
-
+    def __init__(self, countries: Optional[List[str]] = None):
+        # Set up logging
+        logger = logging.getLogger(__name__)
+        
         """Initialize and fetch weather warnings for specified countries."""
         self.country_urls = self._load_urls()
         self.geocodes = self._load_geocodes()
+        
+        """Initialize and fetch weather warnings for specified countries."""
+        if countries is None or (isinstance(countries, list) and not countries):
+            countries = list(self.country_urls.keys())
+            logger.info(
+                "No countries specified. Fetching warnings for ALL available countries. "
+                "This may take some time and consume significant resources."
+            )
+        if not isinstance(countries, list):
+            raise ValueError("Countries must be provided as a list")
+
 
         # Check all countries before proceeding
         for country in countries:
