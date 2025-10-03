@@ -32,8 +32,8 @@ warnings = MeteoAlarm(["estonia", "denmark"])
 
 # Print all warnings
 for warning in warnings:
-    print(f"\nWarning for {warning.area["areaDesc"]} ({warning.country}):")
-    print(f"Headline: {warning.get_headline("en-EN")}")
+    print(f"""\nWarning for {warning.area["areaDesc"]} ({warning.country}):""")
+    print(f"""Headline: {warning.get_headline("en-EN")}""")
     print(f"Severity: {warning.severity}")
     print(f"Valid until: {warning.expires}")
 ```
