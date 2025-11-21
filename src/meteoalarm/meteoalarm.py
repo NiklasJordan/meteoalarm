@@ -87,13 +87,8 @@ class Alert:
     def matches_filter(self, **kwargs) -> bool:
         """Check if warning matches all filter criteria."""
         for key, value in kwargs.items():
-            # Handle nested dictionary attributes
-            if key in ['description', 'headline'] and isinstance(value, str):
-                # Search in all languages
-                if not any(value.lower() in v.lower() for v in getattr(self, key).values()):
-                    return False
             # Handle dictionary attributes
-            elif key in ['sender', 'area'] and isinstance(value, str):
+            if key in ['description', 'headline', 'sender', 'area'] and isinstance(value, str):
                 if not any(value.lower() in v.lower() for v in getattr(self, key).values()):
                     return False
             # Handle datetime attributes
