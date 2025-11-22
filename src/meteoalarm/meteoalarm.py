@@ -9,7 +9,7 @@ import pytz
 import os
 import yaml
 import json
-from re import search, compile, Pattern
+from re import compile, Pattern
 
 # Constants
 NAMESPACE_CAP = "urn:oasis:names:tc:emergency:cap:1.2"
