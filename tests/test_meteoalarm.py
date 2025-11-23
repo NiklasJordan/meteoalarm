@@ -3,7 +3,8 @@ from datetime import datetime
 import pytz
 from unittest.mock import patch, mock_open
 import json
-from meteoalarm import MeteoAlarm, Alert
+from meteoalarm import MeteoAlarm, Alert, Regex
+from re import PatternError
 
 # Sample test data
 SAMPLE_URLS_YAML = """
@@ -171,6 +172,20 @@ def test_filter_warnings(mock_files, mock_requests):
     for warning in filtered:
         assert warning.severity == "Moderate"
         assert warning.urgency == "Immediate"
+        
+    # Test filtering with regex
+    filtered = alarm.filter(area=Regex("Valga"))
+    assert isinstance(filtered, list)
+    for warning in filtered:
+        assert any("Valga" in area for area in warning.area.values())
+        
+    # Test filtering with invalid regex
+    with pytest.raises(PatternError):
+        filtered = alarm.filter(area=Regex(r"(\d{3}"))  # Invalid regex
+        
+    # Test filtering with datetime
+    start_time = datetime(2025, 2, 4, 10, 0, 0, tzinfo=pytz.UTC)
+    filtered = alarm.filter(onset=start_time)
 
 def test_warning_string_representation(mock_files, mock_requests):
     """Test string representation of warnings."""
