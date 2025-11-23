@@ -186,6 +186,9 @@ def test_filter_warnings(mock_files, mock_requests):
     # Test filtering with datetime
     start_time = datetime(2025, 2, 4, 10, 0, 0, tzinfo=pytz.UTC)
     filtered = alarm.filter(onset=start_time)
+    
+    # Test filtering with string isoformat datetime
+    filtered = alarm.filter(onset="2025-02-04T10:45:01+00:00")
 
 def test_warning_string_representation(mock_files, mock_requests):
     """Test string representation of warnings."""
