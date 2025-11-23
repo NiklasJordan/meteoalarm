@@ -156,7 +156,8 @@ class MeteoAlarm:
     def _load_urls(self) -> Dict[str, str]:
         """Load country URLs from YAML file."""
         try:
-            with resources.files('meteoalarm.assets').joinpath('MeteoAlarm_urls.yaml').open('r') as file:
+            path = resources.files('meteoalarm.assets').joinpath('MeteoAlarm_urls.yaml')
+            with path.open('r' , encoding='utf-8') as file:
                 return yaml.safe_load(file)
         except Exception as e:
             raise FileNotFoundError(f"Error loading country URLs configuration: {str(e)}")
