@@ -10,6 +10,7 @@ import os
 import yaml
 import json
 from re import compile, Pattern
+import logging
 
 # Constants
 NAMESPACE_CAP = "urn:oasis:names:tc:emergency:cap:1.2"
@@ -111,11 +112,9 @@ class Alert:
     def matches_filter(self, **kwargs) -> bool:
         """Check if warning matches all filter criteria."""
         for field, filter in kwargs.items():
-            # Handle dictionary attributes
             if field in ['description', 'headline', 'sender', 'area'] and isinstance(filter, (str, Regex)):
                 if not any(self._in(filter, v) for v in getattr(self, field).values()):
                     return False
-            # Handle datetime attributes
             elif field in ['onset', 'effective', 'expires'] and isinstance(filter, (datetime, str)):
                 if isinstance(filter, str):
                     try:
@@ -124,7 +123,6 @@ class Alert:
                         return False
                 if getattr(self, field) != filter:
                     return False
-            # Handle regular attributes
             else:
                 attr_value = getattr(self, field, None)
                 if attr_value is None:
@@ -185,7 +183,7 @@ class MeteoAlarm:
     def _load_geocodes(self) -> Dict[str, str]:
         """Load geocodes from JSON file."""
         try:
-            with resources.files('meteoalarm.assets').joinpath('geocodes.json').open('r') as file:
+            with resources.files('meteoalarm.assets').joinpath('geocodes.json').open('r', encoding='utf-8') as file:
                 data = json.load(file)
                 geocodes = {}
                 for feature in data['features']:

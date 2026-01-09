@@ -202,3 +202,70 @@ def test_case_insensitive_country(mock_files, mock_requests):
     """Test that country names are case insensitive."""
     alarm = MeteoAlarm(['ESTONIA'])
     assert len(alarm) > 0
+
+def test_invalid_xml(mock_files, mock_requests, monkeypatch):
+    """Test handling of invalid XML content."""
+    def mock_get_invalid(url):
+        return MockResponse("<invalid><xml>", 200)
+    monkeypatch.setattr('requests.get', mock_get_invalid)
+    alarm = MeteoAlarm(['estonia'])
+    assert len(alarm) == 0
+
+def test_missing_fields_xml(mock_files, mock_requests, monkeypatch):
+    """Test handling of XML with missing required fields."""
+    SAMPLE_INVALID_CAP_XML = """<?xml version=\"1.0\" encoding=\"UTF-8\"?>
+    <alert xmlns=\"urn:oasis:names:tc:emergency:cap:1.2\">
+        <identifier>2.49.0.0.233.0.EE2025020412450132</identifier>
+        <info>
+            <language>en-EN</language>
+            <category>Met</category>
+            <event>Strong Wind</event>
+        </info>
+    </alert>"""
+    def mock_get_missing_fields(url):
+        return MockResponse(SAMPLE_INVALID_CAP_XML, 200)
+    monkeypatch.setattr('requests.get', mock_get_missing_fields)
+    alarm = MeteoAlarm(['estonia'])
+    assert len(alarm) == 0
+
+def test_multiple_warnings(mock_files, mock_requests, monkeypatch):
+    """Test handling of multiple warnings in a single feed."""
+    SAMPLE_MULTIPLE_ATOM_FEED = """<?xml version=\"1.0\" encoding=\"UTF-8\"?>
+    <feed xmlns=\"http://www.w3.org/2005/Atom\" xmlns:cap=\"urn:oasis:names:tc:emergency:cap:1.2\">
+        <entry>
+            <link href=\"https://feeds.meteoalarm.org/api/v1/warnings/feeds-estonia/ede7f627-1b35-4479-8168-1c6f71f0d304\" type=\"application/cap+xml\"/>
+        </entry>
+        <entry>
+            <link href=\"https://feeds.meteoalarm.org/api/v1/warnings/feeds-estonia/ede7f627-1b35-4479-8168-1c6f71f0d305\" type=\"application/cap+xml\"/>
+        </entry>
+    </feed>"""
+    def mock_get_multiple_warnings(url):
+        if 'feeds/meteoalarm-legacy-atom' in url:
+            return MockResponse(SAMPLE_MULTIPLE_ATOM_FEED)
+        return MockResponse(SAMPLE_CAP_XML)
+    monkeypatch.setattr('requests.get', mock_get_multiple_warnings)
+    alarm = MeteoAlarm(['estonia'])
+    assert len(alarm) == 2
+
+def test_filter_by_date(mock_files, mock_requests):
+    """Test filtering warnings by date."""
+    alarm = MeteoAlarm(['estonia'])
+    filtered = alarm.filter(onset="2025-02-04T10:45:01+00:00")
+    assert isinstance(filtered, list)
+    assert len(filtered) > 0
+    for warning in filtered:
+        assert warning.onset == datetime.fromisoformat("2025-02-04T10:45:01+00:00")
+    # Test filtering by non-existent date
+    filtered = alarm.filter(onset="2020-01-01T00:00:00+00:00")
+    assert isinstance(filtered, list)
+    assert len(filtered) == 0
+
+def test_active_warnings(mock_files, mock_requests):
+    """Test active warnings method."""
+    alarm = MeteoAlarm(['estonia'])
+    active = alarm.active_warnings()
+    assert isinstance(active, list)
+    assert len(active) > 0
+    now = datetime.now(pytz.UTC)
+    for warning in active:
+        assert warning.onset <= now <= warning.expires
