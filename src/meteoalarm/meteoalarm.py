@@ -183,7 +183,7 @@ class MeteoAlarm:
     def _load_geocodes(self) -> Dict[str, str]:
         """Load geocodes from JSON file."""
         try:
-            with resources.files('meteoalarm.assets').joinpath('geocodes.json').open('r', encoding='utf-8') as file:
+            with resources.files('meteoalarm.assets').joinpath('geocodes.json').open('r') as file:
                 data = json.load(file)
                 geocodes = {}
                 for feature in data['features']:
