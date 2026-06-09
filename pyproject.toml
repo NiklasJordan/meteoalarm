@@ -28,7 +28,7 @@ where = ["src"]
 include = ["meteoalarm*"]
 
 [tool.pytest]
-pythonpath = "src"
+pythonpath = ["src"]
 
 [project.urls]
 Homepage = "https://github.com/NiklasJordan/meteoalarm"

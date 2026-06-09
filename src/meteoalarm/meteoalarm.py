@@ -1,17 +1,31 @@
 from dataclasses import dataclass
 from importlib import resources
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Dict, List, Optional, Set
 import requests
 import xml.etree.ElementTree as ET
 from datetime import datetime
 import pytz
 import yaml
 import json
+from re import compile, Pattern
 import logging
 
 # Constants
 NAMESPACE_CAP = "urn:oasis:names:tc:emergency:cap:1.2"
 NAMESPACE_ATOM = "http://www.w3.org/2005/Atom"
+
+
+@dataclass
+class Regex:
+    pattern: str
+    compiled: Pattern
+
+    def __init__(self, pattern: str):
+        self.pattern = pattern
+        self.compiled = compile(self.pattern)
+        
+    def get_regex(self) -> Pattern:
+        return self.compiled
 
 @dataclass
 class Alert:
@@ -35,6 +49,8 @@ class Alert:
 
     def get_available_languages(self) -> List[str]:
         """Get list of available languages for this warning."""
+        # Since both headline and description should have the same languages,
+        # we can use either one
         return list(self.description.keys())
 
     def _get_localized_text(self, lang: str, text_dict: Dict[str, str]) -> Optional[str]:
@@ -46,21 +62,21 @@ class Alert:
         if lang not in text_dict:
             lang = next((lng for lng in text_dict if lng.startswith("en")), self.get_available_languages()[0])
         return text_dict.get(lang)
-
+    
     def get_description(self, lang: str = "en") -> Optional[str]:
         """
         Get description in specified language.
         Returns None if language is not available.
         """
         return self._get_localized_text(lang, self.description)
-
+    
     def get_headline(self, lang: str = "en") -> Optional[str]:
         """
         Get headline in specified language.
         Returns None if language is not available.
         """
         return self._get_localized_text(lang, self.headline)
-
+    
     def get_event(self, lang: str = "en") -> Optional[str]:
         """
         Get event in specified language.
@@ -70,59 +86,72 @@ class Alert:
 
     def __str__(self) -> str:
         """String representation of the warning using English if available."""
+        # Default to English, fallback to first available language
         lang = "en-EN"
         if lang not in self.get_available_languages():
             lang = self.get_available_languages()[0]
+
         return (f"Weather Warning for {self.area['areaDesc']} ({self.country})\n"
                 f"Headline: {self.get_headline(lang)}\n"
                 f"Severity: {self.severity}\n"
                 f"Valid until: {self.expires}")
+        
+    def _in(self, filter_value: str|Regex, attr_value: str) -> bool:
+        """
+        Check if filter_value is in attr_value.
+        If filter_value is a valid regex, use regex matching.
+        """
+        if isinstance(filter_value, Regex):
+            return filter_value.get_regex().search(attr_value) is not None
+        else:
+            return filter_value.lower() in attr_value.lower()
+        
 
     def matches_filter(self, **kwargs) -> bool:
         """Check if warning matches all filter criteria."""
-        for key, value in kwargs.items():
-            if key in ['description', 'headline'] and isinstance(value, str):
-                if not any(value.lower() in v.lower() for v in getattr(self, key).values()):
+        for field, filter in kwargs.items():
+            if field in ['description', 'headline', 'sender', 'area'] and isinstance(filter, (str, Regex)):
+                if not any(self._in(filter, v) for v in getattr(self, field).values()):
                     return False
-            elif key in ['sender', 'area'] and isinstance(value, str):
-                if not any(value.lower() in v.lower() for v in getattr(self, key).values()):
-                    return False
-            elif key in ['onset', 'effective', 'expires'] and isinstance(value, (datetime, str)):
-                if isinstance(value, str):
+            elif field in ['onset', 'effective', 'expires'] and isinstance(filter, (datetime, str)):
+                if isinstance(filter, str):
                     try:
-                        value = datetime.fromisoformat(value.replace('Z', '+00:00'))
+                        filter = datetime.fromisoformat(filter.replace('Z', '+00:00'))
                     except ValueError:
                         return False
-                if getattr(self, key) != value:
+                if getattr(self, field) != filter:
                     return False
             else:
-                attr_value = getattr(self, key, None)
+                attr_value = getattr(self, field, None)
                 if attr_value is None:
                     return False
-                if isinstance(attr_value, str) and isinstance(value, str):
-                    if value.lower() not in attr_value.lower():
+                if isinstance(attr_value, str) and isinstance(filter, (str, Regex)):
+                    if not self._in(filter, attr_value):
                         return False
-                elif attr_value != value:
+                elif attr_value != filter:
                     return False
         return True
 
+
 class MeteoAlarm:
-    def __init__(self, countries: Optional[List[str]] = None):
+    def __init__(self, countries: List[str]):
         """Initialize and fetch weather warnings for specified countries."""
-        self.logger = logging.getLogger(__name__)
-        self.country_urls = self._load_urls()
-        self.geocodes = self._load_geocodes()
-        if countries is None or (isinstance(countries, list) and not countries):
-            countries = list(self.country_urls.keys())
-            self.logger.info(
-                "No countries specified. Fetching warnings for ALL available countries. "
-                "This may take some time and consume significant resources."
-            )
+        if countries is None:
+            raise ValueError("Countries list cannot be None")
         if not isinstance(countries, list):
             raise ValueError("Countries must be provided as a list")
+        if not countries:
+            raise ValueError("No countries provided")
+
+        """Initialize and fetch weather warnings for specified countries."""
+        self.country_urls = self._load_urls()
+        self.geocodes = self._load_geocodes()
+
+        # Check all countries before proceeding
         for country in countries:
             if country.lower() not in self.country_urls:
                 raise ValueError(f"No URL configuration found for country: {country}")
+
         self._warnings = self._get_all_warnings(countries)
 
     def __iter__(self):
@@ -193,21 +222,78 @@ class MeteoAlarm:
         try:
             root = ET.fromstring(xml_content)
             first_info = root.find(f".//{{{NAMESPACE_CAP}}}info")
+
             if first_info is None:
                 return None
-            descriptions, headlines, event_detail = self._extract_info_details(root)
-            sender = self._extract_sender_info(root, first_info)
-            area, geometry = self._extract_area_info(first_info)
+
+            # Helper function to safely get text from XML element
+            def safe_get_text(element: Optional[ET.Element], xpath: str, default: str = '') -> str:
+                try:
+                    elem = element.find(xpath) if element is not None else None
+                    return elem.text if elem is not None and elem.text is not None else default
+                except (AttributeError, TypeError):
+                    return default
+
+            # Get descriptions and headlines in different languages
+            descriptions = {}
+            headlines = {}
+            event_detail = {}
+            polygon = None
+            for info in root.findall(f".//{{{NAMESPACE_CAP}}}info"):
+                lang = safe_get_text(info, f".//{{{NAMESPACE_CAP}}}language")
+                if lang:
+                    desc = safe_get_text(info, f".//{{{NAMESPACE_CAP}}}description")
+                    headline = safe_get_text(info, f".//{{{NAMESPACE_CAP}}}headline")
+                    event = safe_get_text(info, f".//{{{NAMESPACE_CAP}}}event")
+                    if desc:
+                        descriptions[lang] = desc
+                    if headline:
+                        headlines[lang] = headline
+                    if event:
+                        event_detail[lang] = event
+            
+            # Get sender information
+            sender = {
+                'sender': safe_get_text(root, f".//{{{NAMESPACE_CAP}}}sender"),
+                'senderName': safe_get_text(first_info, f".//{{{NAMESPACE_CAP}}}senderName"),
+                'contact': safe_get_text(first_info, f".//{{{NAMESPACE_CAP}}}contact"),
+                'web': safe_get_text(first_info, f".//{{{NAMESPACE_CAP}}}web")
+            }
+
+            # Get area information
+            area = {}
+            area_elem = first_info.find(f".//{{{NAMESPACE_CAP}}}area")
+            if area_elem is not None:
+                area['areaDesc'] = safe_get_text(area_elem, f".//{{{NAMESPACE_CAP}}}areaDesc")
+                geocode = area_elem.find(f".//{{{NAMESPACE_CAP}}}geocode")
+                if geocode is not None:
+                    area['EMMA_ID'] = safe_get_text(geocode, f".//{{{NAMESPACE_CAP}}}value")
+
+            # Get polygon information
+            polygon = safe_get_text(first_info, f".//{{{NAMESPACE_CAP}}}polygon", None)
+            if polygon:
+                coordinates = [
+                    [float(coord) for coord in point.split(',')]
+                    for point in polygon.split()
+                ]
+                geometry = json.dumps({
+                    "type": "Polygon",
+                    "coordinates": [coordinates]
+                })
+            else:
+                geometry = self.geocodes.get(area.get('EMMA_ID'))
+        
+            # Create Alert object with proper error handling for all fields
             return Alert(
-                identifier=self._safe_get_text(root, f".//{{{NAMESPACE_CAP}}}identifier"),
-                category=self._safe_get_text(first_info, f".//{{{NAMESPACE_CAP}}}category"),
+                identifier=safe_get_text(root, f".//{{{NAMESPACE_CAP}}}identifier"),
+                category=safe_get_text(first_info, f".//{{{NAMESPACE_CAP}}}category"),
                 event=event_detail,
-                urgency=self._safe_get_text(first_info, f".//{{{NAMESPACE_CAP}}}urgency"),
-                severity=self._safe_get_text(first_info, f".//{{{NAMESPACE_CAP}}}severity"),
-                certainty=self._safe_get_text(first_info, f".//{{{NAMESPACE_CAP}}}certainty"),
-                onset=self._parse_datetime(self._safe_get_text(first_info, f".//{{{NAMESPACE_CAP}}}onset")),
-                effective=self._parse_datetime(self._safe_get_text(first_info, f".//{{{NAMESPACE_CAP}}}effective")),
-                expires=self._parse_datetime(self._safe_get_text(first_info, f".//{{{NAMESPACE_CAP}}}expires")),
+                urgency=safe_get_text(first_info, f".//{{{NAMESPACE_CAP}}}urgency"),
+                severity=safe_get_text(first_info, f".//{{{NAMESPACE_CAP}}}severity"),
+                certainty=safe_get_text(first_info, f".//{{{NAMESPACE_CAP}}}certainty"),
+                onset=self._parse_datetime(safe_get_text(first_info, f".//{{{NAMESPACE_CAP}}}onset")),
+                effective=self._parse_datetime(safe_get_text(first_info, f".//{{{NAMESPACE_CAP}}}effective")),
+                expires=self._parse_datetime(safe_get_text(first_info, f".//{{{NAMESPACE_CAP}}}expires")),
                 sender=sender,
                 headline=headlines,
                 description=descriptions,
@@ -218,76 +304,24 @@ class MeteoAlarm:
                 geometry=geometry
             )
         except Exception as e:
-            self.logger.error(f"Error parsing warning for {country}: {str(e)}")
+            print(f"Error parsing warning for {country}: {str(e)}")
             return None
-
-    def _extract_info_details(self, root: ET.Element) -> Tuple[Dict[str, str], Dict[str, str], Dict[str, str]]:
-        """Extract descriptions, headlines, and event details from XML."""
-        descriptions, headlines, event_detail = {}, {}, {}
-        for info in root.findall(f".//{{{NAMESPACE_CAP}}}info"):
-            lang = self._safe_get_text(info, f".//{{{NAMESPACE_CAP}}}language")
-            if lang:
-                desc = self._safe_get_text(info, f".//{{{NAMESPACE_CAP}}}description")
-                headline = self._safe_get_text(info, f".//{{{NAMESPACE_CAP}}}headline")
-                event = self._safe_get_text(info, f".//{{{NAMESPACE_CAP}}}event")
-                if desc:
-                    descriptions[lang] = desc
-                if headline:
-                    headlines[lang] = headline
-                if event:
-                    event_detail[lang] = event
-        return descriptions, headlines, event_detail
-
-    def _extract_sender_info(self, root: ET.Element, first_info: ET.Element) -> Dict[str, str]:
-        """Extract sender information from XML."""
-        return {
-            'sender': self._safe_get_text(root, f".//{{{NAMESPACE_CAP}}}sender"),
-            'senderName': self._safe_get_text(first_info, f".//{{{NAMESPACE_CAP}}}senderName"),
-            'contact': self._safe_get_text(first_info, f".//{{{NAMESPACE_CAP}}}contact"),
-            'web': self._safe_get_text(first_info, f".//{{{NAMESPACE_CAP}}}web")
-        }
-
-    def _extract_area_info(self, first_info: ET.Element) -> Tuple[Dict[str, str], Optional[str]]:
-        """Extract area and geometry information from XML."""
-        area = {}
-        area_elem = first_info.find(f".//{{{NAMESPACE_CAP}}}area")
-        if area_elem is not None:
-            area['areaDesc'] = self._safe_get_text(area_elem, f".//{{{NAMESPACE_CAP}}}areaDesc")
-            geocode = area_elem.find(f".//{{{NAMESPACE_CAP}}}geocode")
-            if geocode is not None:
-                area['EMMA_ID'] = self._safe_get_text(geocode, f".//{{{NAMESPACE_CAP}}}value")
-        polygon = self._safe_get_text(first_info, f".//{{{NAMESPACE_CAP}}}polygon", None)
-        if polygon:
-            coordinates = [
-                [float(coord) for coord in point.split(',')]
-                for point in polygon.split()
-            ]
-            geometry = json.dumps({
-                "type": "Polygon",
-                "coordinates": [coordinates]
-            })
-        else:
-            geometry = self.geocodes.get(area.get('EMMA_ID'))
-        return area, geometry
-
-    def _safe_get_text(self, element: Optional[ET.Element], xpath: str, default: str = '') -> str:
-        """Helper function to safely get text from XML element."""
-        try:
-            elem = element.find(xpath) if element is not None else None
-            return elem.text if elem is not None and elem.text is not None else default
-        except (AttributeError, TypeError):
-            return default
 
     def _get_warnings_for_country(self, country: str) -> List[Alert]:
         """Get weather warnings for a specific country."""
         url = self.country_urls.get(country.lower())
         if not url:
             raise ValueError(f"No URL configuration found for country: {country}")
+
         try:
+            # Get the Atom feed
             response = requests.get(url)
             response.raise_for_status()
+
             root = ET.fromstring(response.content)
             warnings = []
+
+            # Process each entry in the feed
             for entry in root.findall(f".//{{{NAMESPACE_ATOM}}}entry"):
                 try:
                     warning_link = entry.find(f".//{{{NAMESPACE_ATOM}}}link[@type='application/cap+xml']")
@@ -295,15 +329,17 @@ class MeteoAlarm:
                         warning_url = warning_link.get('href')
                         warning_response = requests.get(warning_url)
                         warning_response.raise_for_status()
+
                         warning = self._parse_warning_xml(warning_response.content, country)
                         if warning:
                             warnings.append(warning)
                 except Exception as e:
-                    self.logger.error(f"Error processing entry for {country}: {str(e)}")
+                    print(f"Error processing entry for {country}: {str(e)}")
                     continue
+
             return warnings
         except Exception as e:
-            self.logger.error(f"Error fetching warnings for {country}: {str(e)}")
+            print(f"Error fetching warnings for {country}: {str(e)}")
             return []
 
     def _get_all_warnings(self, countries: List[str]) -> List[Alert]:
@@ -314,7 +350,7 @@ class MeteoAlarm:
                 country_warnings = self._get_warnings_for_country(country)
                 all_warnings.extend(country_warnings)
             except Exception as e:
-                self.logger.error(f"Error fetching warnings for {country}: {str(e)}")
+                print(f"Error fetching warnings for {country}: {str(e)}")
         return all_warnings
 
     def available_languages(self) -> Set[str]:
@@ -325,14 +361,12 @@ class MeteoAlarm:
         return languages
 
     def filter(self, **kwargs) -> List[Alert]:
-        """Filter warnings based on provided criteria. Returns a list of warnings that match ALL criteria."""
+        """
+        Filter warnings based on provided criteria.
+        Returns a list of warnings that match ALL criteria.
+        """
         filtered_warnings = []
         for warning in self._warnings:
             if warning.matches_filter(**kwargs):
                 filtered_warnings.append(warning)
         return filtered_warnings
-
-    def active_warnings(self) -> List[Alert]:
-        """Return a list of active warnings (onset in the past and expires in the future)."""
-        now = datetime.now(pytz.UTC)
-        return [warning for warning in self._warnings if warning.onset <= now <= warning.expires]
