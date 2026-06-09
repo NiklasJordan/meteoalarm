@@ -1,4 +1,3 @@
-import datetime
 from dataclasses import dataclass
 from importlib import resources
 from typing import Dict, List, Optional, Set, Tuple
@@ -6,7 +5,6 @@ import requests
 import xml.etree.ElementTree as ET
 from datetime import datetime
 import pytz
-import os
 import yaml
 import json
 import logging
@@ -46,7 +44,7 @@ class Alert:
         or the first available language.
         """
         if lang not in text_dict:
-            lang = next((l for l in text_dict if l.startswith("en")), self.get_available_languages()[0])
+            lang = next((lng for lng in text_dict if lng.startswith("en")), self.get_available_languages()[0])
         return text_dict.get(lang)
 
     def get_description(self, lang: str = "en") -> Optional[str]:
@@ -146,7 +144,8 @@ class MeteoAlarm:
     def _load_urls(self) -> Dict[str, str]:
         """Load country URLs from YAML file."""
         try:
-            with resources.files('meteoalarm.assets').joinpath('MeteoAlarm_urls.yaml').open('r') as file:
+            path = resources.files('meteoalarm.assets').joinpath('MeteoAlarm_urls.yaml')
+            with path.open('r' , encoding='utf-8') as file:
                 return yaml.safe_load(file)
         except Exception as e:
             raise FileNotFoundError(f"Error loading country URLs configuration: {str(e)}")
@@ -154,7 +153,8 @@ class MeteoAlarm:
     def _load_geocodes(self) -> Dict[str, str]:
         """Load geocodes from JSON file."""
         try:
-            with resources.files('meteoalarm.assets').joinpath('geocodes.json').open('r') as file:
+            path = resources.files('meteoalarm.assets').joinpath('geocodes.json')
+            with path.open('r', encoding='utf-8') as file:
                 data = json.load(file)
                 geocodes = {}
                 for feature in data['features']:
