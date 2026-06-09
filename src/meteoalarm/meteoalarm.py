@@ -1,4 +1,3 @@
-import datetime
 from dataclasses import dataclass
 from importlib import resources
 from typing import Dict, List, Optional, Set
@@ -6,14 +5,27 @@ import requests
 import xml.etree.ElementTree as ET
 from datetime import datetime
 import pytz
-import os
 import yaml
 import json
+from re import compile, Pattern
+import logging
 
 # Constants
 NAMESPACE_CAP = "urn:oasis:names:tc:emergency:cap:1.2"
 NAMESPACE_ATOM = "http://www.w3.org/2005/Atom"
 
+
+@dataclass
+class Regex:
+    pattern: str
+    compiled: Pattern
+
+    def __init__(self, pattern: str):
+        self.pattern = pattern
+        self.compiled = compile(self.pattern)
+        
+    def get_regex(self) -> Pattern:
+        return self.compiled
 
 @dataclass
 class Alert:
@@ -48,7 +60,7 @@ class Alert:
         or the first available language.
         """
         if lang not in text_dict:
-            lang = next((l for l in text_dict if l.startswith("en")), self.get_available_languages()[0])
+            lang = next((lng for lng in text_dict if lng.startswith("en")), self.get_available_languages()[0])
         return text_dict.get(lang)
     
     def get_description(self, lang: str = "en") -> Optional[str]:
@@ -83,37 +95,40 @@ class Alert:
                 f"Headline: {self.get_headline(lang)}\n"
                 f"Severity: {self.severity}\n"
                 f"Valid until: {self.expires}")
+        
+    def _in(self, filter_value: str|Regex, attr_value: str) -> bool:
+        """
+        Check if filter_value is in attr_value.
+        If filter_value is a valid regex, use regex matching.
+        """
+        if isinstance(filter_value, Regex):
+            return filter_value.get_regex().search(attr_value) is not None
+        else:
+            return filter_value.lower() in attr_value.lower()
+        
 
     def matches_filter(self, **kwargs) -> bool:
         """Check if warning matches all filter criteria."""
-        for key, value in kwargs.items():
-            # Handle nested dictionary attributes
-            if key in ['description', 'headline'] and isinstance(value, str):
-                # Search in all languages
-                if not any(value.lower() in v.lower() for v in getattr(self, key).values()):
+        for field, filter in kwargs.items():
+            if field in ['description', 'headline', 'sender', 'area'] and isinstance(filter, (str, Regex)):
+                if not any(self._in(filter, v) for v in getattr(self, field).values()):
                     return False
-            # Handle dictionary attributes
-            elif key in ['sender', 'area'] and isinstance(value, str):
-                if not any(value.lower() in v.lower() for v in getattr(self, key).values()):
-                    return False
-            # Handle datetime attributes
-            elif key in ['onset', 'effective', 'expires'] and isinstance(value, (datetime, str)):
-                if isinstance(value, str):
+            elif field in ['onset', 'effective', 'expires'] and isinstance(filter, (datetime, str)):
+                if isinstance(filter, str):
                     try:
-                        value = datetime.fromisoformat(value.replace('Z', '+00:00'))
+                        filter = datetime.fromisoformat(filter.replace('Z', '+00:00'))
                     except ValueError:
                         return False
-                if getattr(self, key) != value:
+                if getattr(self, field) != filter:
                     return False
-            # Handle regular attributes
             else:
-                attr_value = getattr(self, key, None)
+                attr_value = getattr(self, field, None)
                 if attr_value is None:
                     return False
-                if isinstance(attr_value, str) and isinstance(value, str):
-                    if value.lower() not in attr_value.lower():
+                if isinstance(attr_value, str) and isinstance(filter, (str, Regex)):
+                    if not self._in(filter, attr_value):
                         return False
-                elif attr_value != value:
+                elif attr_value != filter:
                     return False
         return True
 
@@ -158,7 +173,8 @@ class MeteoAlarm:
     def _load_urls(self) -> Dict[str, str]:
         """Load country URLs from YAML file."""
         try:
-            with resources.files('meteoalarm.assets').joinpath('MeteoAlarm_urls.yaml').open('r') as file:
+            path = resources.files('meteoalarm.assets').joinpath('MeteoAlarm_urls.yaml')
+            with path.open('r' , encoding='utf-8') as file:
                 return yaml.safe_load(file)
         except Exception as e:
             raise FileNotFoundError(f"Error loading country URLs configuration: {str(e)}")
@@ -166,7 +182,8 @@ class MeteoAlarm:
     def _load_geocodes(self) -> Dict[str, str]:
         """Load geocodes from JSON file."""
         try:
-            with resources.files('meteoalarm.assets').joinpath('geocodes.json').open('r') as file:
+            path = resources.files('meteoalarm.assets').joinpath('geocodes.json')
+            with path.open('r', encoding='utf-8') as file:
                 data = json.load(file)
                 geocodes = {}
                 for feature in data['features']:

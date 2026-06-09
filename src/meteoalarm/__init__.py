@@ -1,1 +1,1 @@
-from .meteoalarm import MeteoAlarm, Alert
+from .meteoalarm import MeteoAlarm, Alert, Regex

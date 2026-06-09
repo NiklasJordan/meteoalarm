@@ -32,8 +32,8 @@ warnings = MeteoAlarm(["estonia", "denmark"])
 
 # Print all warnings
 for warning in warnings:
-    print(f"\nWarning for {warning.area["areaDesc"]} ({warning.country}):")
-    print(f"Headline: {warning.get_headline("en-EN")}")
+    print(f"""\nWarning for {warning.area["areaDesc"]} ({warning.country}):""")
+    print(f"""Headline: {warning.get_headline("en-EN")}""")
     print(f"Severity: {warning.severity}")
     print(f"Valid until: {warning.expires}")
 ```
@@ -53,8 +53,19 @@ wind_warnings = warnings.filter(description="wind")
 specific_warnings = warnings.filter(
     country="estonia",
     severity="Moderate",
-    awareness_type="Wind"
+    awareness_type="2"
 )
+
+# Filter with meteoalarm.Regex
+from meteoalarm import Regex
+regex_warnings = warnings.filter(area=Regex(r"^Orange.*"))
+
+# Filter with datetime.datatime objects
+from datetime import datetime
+active_warnings = warnings.filter(onset=datetime.now())
+
+# Filter with ISO 8601 date strings
+active_warnings_iso = warnings.filter(onset="2024-12-31T23:59:59Z")
 
 # Chain filters
 critical_wind = warnings.filter(awareness_type="Wind").filter(severity="Severe")
