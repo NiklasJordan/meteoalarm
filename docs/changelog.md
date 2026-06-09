@@ -1,5 +1,12 @@
 # Changelog
 
+## Version 0.3.0 (2026/06/09)
+
+* [#3](https://github.com/NiklasJordan/meteoalarm/issues/3) - Ability to get all warnings from all countries
+* [#4](https://github.com/NiklasJordan/meteoalarm/issues/4) - Fix encoding issue when loading files
+* [#5](https://github.com/NiklasJordan/meteoalarm/issues/5) - Add support for regex filters
+* [#6](https://github.com/NiklasJordan/meteoalarm/issues/6) - Fix missing triple quotes in README example
+
 ## Version 0.2.0 (2025/02/17)
 
 ### Features added
