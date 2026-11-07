@@ -377,3 +377,8 @@ class MeteoAlarm:
             if warning.matches_filter(**kwargs):
                 filtered_warnings.append(warning)
         return filtered_warnings
+
+    def active_warnings(self) -> List[Alert]:
+        """Return a list of active warnings (onset in the past and expires in the future)."""
+        now = datetime.now(pytz.UTC)
+        return [warning for warning in self._warnings if warning.onset <= now <= warning.expires]
