@@ -133,6 +133,9 @@ def test_requests_use_timeout(mock_files, monkeypatch):
     MeteoAlarm(["estonia"], timeout=3)
     assert timeouts == [3]
 
+    with pytest.raises(TypeError):
+        MeteoAlarm(["estonia"], 3)
+
 
 def test_initialization(mock_files, mock_requests):
     """Test basic initialization of MeteoAlarm."""

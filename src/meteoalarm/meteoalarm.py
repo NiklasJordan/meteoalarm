@@ -136,7 +136,7 @@ class Alert:
 
 
 class MeteoAlarm:
-    def __init__(self, countries: List[str], timeout: float = DEFAULT_TIMEOUT):
+    def __init__(self, countries: List[str], *, timeout: float = DEFAULT_TIMEOUT):
         """Initialize and fetch weather warnings for specified countries.
 
         timeout is passed to every HTTP request, so a stalled server can't
