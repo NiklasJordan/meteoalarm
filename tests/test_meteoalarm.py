@@ -3,8 +3,10 @@ from datetime import datetime
 import pytz
 from unittest.mock import patch, mock_open
 import json
+import requests
 from meteoalarm import MeteoAlarm, Alert, Regex
-from re import PatternError
+from meteoalarm.meteoalarm import DEFAULT_TIMEOUT
+from re import error as PatternError
 
 # Sample test data
 SAMPLE_URLS_YAML = """
@@ -80,6 +82,15 @@ SAMPLE_CAP_XML = """<?xml version="1.0" encoding="UTF-8"?>
     </info>
 </alert>"""
 
+class MockResponse:
+    def __init__(self, content, status_code=200):
+        self.content = content.encode('utf-8')
+        self.status_code = status_code
+
+    def raise_for_status(self):
+        if self.status_code != 200:
+            raise Exception("HTTP Error")
+
 @pytest.fixture
 def mock_files(monkeypatch):
     """Mock file operations for configuration files."""
@@ -96,16 +107,7 @@ def mock_files(monkeypatch):
 @pytest.fixture
 def mock_requests(monkeypatch):
     """Mock HTTP requests."""
-    class MockResponse:
-        def __init__(self, content, status_code=200):
-            self.content = content.encode('utf-8')
-            self.status_code = status_code
-
-        def raise_for_status(self):
-            if self.status_code != 200:
-                raise Exception("HTTP Error")
-
-    def mock_get(url):
+    def mock_get(url, **kwargs):
         if 'feeds/meteoalarm-legacy-atom' in url:
             return MockResponse(SAMPLE_ATOM_FEED)
         elif 'warning' in url or 'feeds-estonia' in url:
@@ -114,6 +116,26 @@ def mock_requests(monkeypatch):
 
     monkeypatch.setattr('requests.get', mock_get)
     return mock_get
+
+def test_requests_use_timeout(mock_files, monkeypatch):
+    """Every request gets a timeout, so a stalled server can't hang the caller."""
+    timeouts = []
+
+    def recording_get(url, **kwargs):
+        timeouts.append(kwargs.get("timeout"))
+        raise requests.exceptions.Timeout("simulated")
+
+    monkeypatch.setattr("requests.get", recording_get)
+    MeteoAlarm(["estonia"])
+    assert timeouts == [DEFAULT_TIMEOUT]
+
+    timeouts.clear()
+    MeteoAlarm(["estonia"], timeout=3)
+    assert timeouts == [3]
+
+    with pytest.raises(TypeError):
+        MeteoAlarm(["estonia"], 3)
+
 
 def test_initialization(mock_files, mock_requests):
     """Test basic initialization of MeteoAlarm."""
@@ -205,7 +227,7 @@ def test_case_insensitive_country(mock_files, mock_requests):
 
 def test_invalid_xml(mock_files, mock_requests, monkeypatch):
     """Test handling of invalid XML content."""
-    def mock_get_invalid(url):
+    def mock_get_invalid(url, **kwargs):
         return MockResponse("<invalid><xml>", 200)
     monkeypatch.setattr('requests.get', mock_get_invalid)
     alarm = MeteoAlarm(['estonia'])
@@ -222,7 +244,7 @@ def test_missing_fields_xml(mock_files, mock_requests, monkeypatch):
             <event>Strong Wind</event>
         </info>
     </alert>"""
-    def mock_get_missing_fields(url):
+    def mock_get_missing_fields(url, **kwargs):
         return MockResponse(SAMPLE_INVALID_CAP_XML, 200)
     monkeypatch.setattr('requests.get', mock_get_missing_fields)
     alarm = MeteoAlarm(['estonia'])
@@ -239,7 +261,7 @@ def test_multiple_warnings(mock_files, mock_requests, monkeypatch):
             <link href=\"https://feeds.meteoalarm.org/api/v1/warnings/feeds-estonia/ede7f627-1b35-4479-8168-1c6f71f0d305\" type=\"application/cap+xml\"/>
         </entry>
     </feed>"""
-    def mock_get_multiple_warnings(url):
+    def mock_get_multiple_warnings(url, **kwargs):
         if 'feeds/meteoalarm-legacy-atom' in url:
             return MockResponse(SAMPLE_MULTIPLE_ATOM_FEED)
         return MockResponse(SAMPLE_CAP_XML)
@@ -260,12 +282,25 @@ def test_filter_by_date(mock_files, mock_requests):
     assert isinstance(filtered, list)
     assert len(filtered) == 0
 
-def test_active_warnings(mock_files, mock_requests):
+def freeze_now(monkeypatch, now):
+    """Make datetime.now() in the library return a fixed time."""
+    class FrozenDatetime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return now.astimezone(tz)
+    monkeypatch.setattr('meteoalarm.meteoalarm.datetime', FrozenDatetime)
+
+def test_active_warnings(mock_files, mock_requests, monkeypatch):
     """Test active warnings method."""
     alarm = MeteoAlarm(['estonia'])
+    # The sample warning runs from 2025-02-04T10:45:01 to 2025-02-05T10:36:06
+    freeze_now(monkeypatch, datetime(2025, 2, 4, 12, 0, tzinfo=pytz.UTC))
     active = alarm.active_warnings()
     assert isinstance(active, list)
-    assert len(active) > 0
-    now = datetime.now(pytz.UTC)
-    for warning in active:
-        assert warning.onset <= now <= warning.expires
+    assert len(active) == 1
+
+    freeze_now(monkeypatch, datetime(2025, 2, 4, 10, 0, tzinfo=pytz.UTC))
+    assert alarm.active_warnings() == []
+
+    freeze_now(monkeypatch, datetime(2025, 2, 6, tzinfo=pytz.UTC))
+    assert alarm.active_warnings() == []
