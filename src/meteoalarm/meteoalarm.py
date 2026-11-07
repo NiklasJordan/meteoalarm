@@ -13,6 +13,8 @@ import logging
 # Constants
 NAMESPACE_CAP = "urn:oasis:names:tc:emergency:cap:1.2"
 NAMESPACE_ATOM = "http://www.w3.org/2005/Atom"
+# Seconds to wait for MeteoAlarm to connect or send data, per request
+DEFAULT_TIMEOUT = 10
 
 
 @dataclass
@@ -134,8 +136,12 @@ class Alert:
 
 
 class MeteoAlarm:
-    def __init__(self, countries: List[str]):
-        """Initialize and fetch weather warnings for specified countries."""
+    def __init__(self, countries: List[str], *, timeout: float = DEFAULT_TIMEOUT):
+        """Initialize and fetch weather warnings for specified countries.
+
+        timeout is passed to every HTTP request, so a stalled server can't
+        block forever.
+        """
         if countries is None:
             raise ValueError("Countries list cannot be None")
         if not isinstance(countries, list):
@@ -144,6 +150,7 @@ class MeteoAlarm:
             raise ValueError("No countries provided")
 
         """Initialize and fetch weather warnings for specified countries."""
+        self.timeout = timeout
         self.country_urls = self._load_urls()
         self.geocodes = self._load_geocodes()
 
@@ -315,7 +322,7 @@ class MeteoAlarm:
 
         try:
             # Get the Atom feed
-            response = requests.get(url)
+            response = requests.get(url, timeout=self.timeout)
             response.raise_for_status()
 
             root = ET.fromstring(response.content)
@@ -327,7 +334,7 @@ class MeteoAlarm:
                     warning_link = entry.find(f".//{{{NAMESPACE_ATOM}}}link[@type='application/cap+xml']")
                     if warning_link is not None:
                         warning_url = warning_link.get('href')
-                        warning_response = requests.get(warning_url)
+                        warning_response = requests.get(warning_url, timeout=self.timeout)
                         warning_response.raise_for_status()
 
                         warning = self._parse_warning_xml(warning_response.content, country)

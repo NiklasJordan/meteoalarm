@@ -3,7 +3,9 @@ from datetime import datetime
 import pytz
 from unittest.mock import patch, mock_open
 import json
+import requests
 from meteoalarm import MeteoAlarm, Alert, Regex
+from meteoalarm.meteoalarm import DEFAULT_TIMEOUT
 from re import PatternError
 
 # Sample test data
@@ -105,7 +107,7 @@ def mock_requests(monkeypatch):
             if self.status_code != 200:
                 raise Exception("HTTP Error")
 
-    def mock_get(url):
+    def mock_get(url, **kwargs):
         if 'feeds/meteoalarm-legacy-atom' in url:
             return MockResponse(SAMPLE_ATOM_FEED)
         elif 'warning' in url or 'feeds-estonia' in url:
@@ -114,6 +116,26 @@ def mock_requests(monkeypatch):
 
     monkeypatch.setattr('requests.get', mock_get)
     return mock_get
+
+def test_requests_use_timeout(mock_files, monkeypatch):
+    """Every request gets a timeout, so a stalled server can't hang the caller."""
+    timeouts = []
+
+    def recording_get(url, **kwargs):
+        timeouts.append(kwargs.get("timeout"))
+        raise requests.exceptions.Timeout("simulated")
+
+    monkeypatch.setattr("requests.get", recording_get)
+    MeteoAlarm(["estonia"])
+    assert timeouts == [DEFAULT_TIMEOUT]
+
+    timeouts.clear()
+    MeteoAlarm(["estonia"], timeout=3)
+    assert timeouts == [3]
+
+    with pytest.raises(TypeError):
+        MeteoAlarm(["estonia"], 3)
+
 
 def test_initialization(mock_files, mock_requests):
     """Test basic initialization of MeteoAlarm."""
@@ -205,7 +227,7 @@ def test_case_insensitive_country(mock_files, mock_requests):
 
 def test_invalid_xml(mock_files, mock_requests, monkeypatch):
     """Test handling of invalid XML content."""
-    def mock_get_invalid(url):
+    def mock_get_invalid(url, **kwargs):
         return MockResponse("<invalid><xml>", 200)
     monkeypatch.setattr('requests.get', mock_get_invalid)
     alarm = MeteoAlarm(['estonia'])
@@ -222,7 +244,7 @@ def test_missing_fields_xml(mock_files, mock_requests, monkeypatch):
             <event>Strong Wind</event>
         </info>
     </alert>"""
-    def mock_get_missing_fields(url):
+    def mock_get_missing_fields(url, **kwargs):
         return MockResponse(SAMPLE_INVALID_CAP_XML, 200)
     monkeypatch.setattr('requests.get', mock_get_missing_fields)
     alarm = MeteoAlarm(['estonia'])
@@ -239,7 +261,7 @@ def test_multiple_warnings(mock_files, mock_requests, monkeypatch):
             <link href=\"https://feeds.meteoalarm.org/api/v1/warnings/feeds-estonia/ede7f627-1b35-4479-8168-1c6f71f0d305\" type=\"application/cap+xml\"/>
         </entry>
     </feed>"""
-    def mock_get_multiple_warnings(url):
+    def mock_get_multiple_warnings(url, **kwargs):
         if 'feeds/meteoalarm-legacy-atom' in url:
             return MockResponse(SAMPLE_MULTIPLE_ATOM_FEED)
         return MockResponse(SAMPLE_CAP_XML)
