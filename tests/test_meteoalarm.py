@@ -6,7 +6,7 @@ import json
 import requests
 from meteoalarm import MeteoAlarm, Alert, Regex
 from meteoalarm.meteoalarm import DEFAULT_TIMEOUT
-from re import PatternError
+from re import error as PatternError
 
 # Sample test data
 SAMPLE_URLS_YAML = """
@@ -82,6 +82,15 @@ SAMPLE_CAP_XML = """<?xml version="1.0" encoding="UTF-8"?>
     </info>
 </alert>"""
 
+class MockResponse:
+    def __init__(self, content, status_code=200):
+        self.content = content.encode('utf-8')
+        self.status_code = status_code
+
+    def raise_for_status(self):
+        if self.status_code != 200:
+            raise Exception("HTTP Error")
+
 @pytest.fixture
 def mock_files(monkeypatch):
     """Mock file operations for configuration files."""
@@ -98,15 +107,6 @@ def mock_files(monkeypatch):
 @pytest.fixture
 def mock_requests(monkeypatch):
     """Mock HTTP requests."""
-    class MockResponse:
-        def __init__(self, content, status_code=200):
-            self.content = content.encode('utf-8')
-            self.status_code = status_code
-
-        def raise_for_status(self):
-            if self.status_code != 200:
-                raise Exception("HTTP Error")
-
     def mock_get(url, **kwargs):
         if 'feeds/meteoalarm-legacy-atom' in url:
             return MockResponse(SAMPLE_ATOM_FEED)
@@ -282,12 +282,25 @@ def test_filter_by_date(mock_files, mock_requests):
     assert isinstance(filtered, list)
     assert len(filtered) == 0
 
-def test_active_warnings(mock_files, mock_requests):
+def freeze_now(monkeypatch, now):
+    """Make datetime.now() in the library return a fixed time."""
+    class FrozenDatetime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return now.astimezone(tz)
+    monkeypatch.setattr('meteoalarm.meteoalarm.datetime', FrozenDatetime)
+
+def test_active_warnings(mock_files, mock_requests, monkeypatch):
     """Test active warnings method."""
     alarm = MeteoAlarm(['estonia'])
+    # The sample warning runs from 2025-02-04T10:45:01 to 2025-02-05T10:36:06
+    freeze_now(monkeypatch, datetime(2025, 2, 4, 12, 0, tzinfo=pytz.UTC))
     active = alarm.active_warnings()
     assert isinstance(active, list)
-    assert len(active) > 0
-    now = datetime.now(pytz.UTC)
-    for warning in active:
-        assert warning.onset <= now <= warning.expires
+    assert len(active) == 1
+
+    freeze_now(monkeypatch, datetime(2025, 2, 4, 10, 0, tzinfo=pytz.UTC))
+    assert alarm.active_warnings() == []
+
+    freeze_now(monkeypatch, datetime(2025, 2, 6, tzinfo=pytz.UTC))
+    assert alarm.active_warnings() == []
